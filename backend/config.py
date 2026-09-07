@@ -1,8 +1,91 @@
-"""HireWise configuration (pydantic-settings).
+"""Central configuration for HireWise (pydantic-settings).
 
-Reads values from environment variables / `.env` file.
-See `.env.example` at the repository root for all available settings.
+Values are read from environment variables or a local ``.env`` file.
+See ``.env.example`` at the repository root for the full list of options.
 """
+from __future__ import annotations
 
-# TODO(Team): add Settings(BaseSettings) with app, security, upload,
-#             scoring-rubric weights and LLM provider settings.
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ---------------------------------------------------------------------------
+# Project paths (runtime directories are created automatically)
+# ---------------------------------------------------------------------------
+ROOT_DIR = Path(__file__).resolve().parent.parent          # repository root
+DATA_DIR = ROOT_DIR / "data"                               # sqlite db
+STORAGE_CVS_DIR = ROOT_DIR / "storage" / "cvs"             # encrypted original CVs
+KB_DOCS_DIR = ROOT_DIR / "knowledge_base" / "docs"         # seed documents for ChromaDB
+CHROMA_DIR = ROOT_DIR / "chroma_db"                        # persistent vector store
+
+for _dir in (DATA_DIR, STORAGE_CVS_DIR, KB_DOCS_DIR, CHROMA_DIR):
+    _dir.mkdir(parents=True, exist_ok=True)
+
+
+class Settings(BaseSettings):
+    """Application settings.
+
+    Every field can be overridden with an environment variable or a line in
+    the repository-root ``.env`` file (see ``.env.example``).
+    """
+
+    model_config = SettingsConfigDict(env_file=str(ROOT_DIR / ".env"), extra="ignore")
+
+    # --- app -----------------------------------------------------------------
+    app_name: str = "HireWise"
+    debug: bool = True
+    database_url: str = "sqlite:///./data/hirewise.db"
+
+    # --- security --------------------------------------------------------------
+    secret_key: str = "change-me-to-a-long-random-string"
+    encryption_key: str = ""            # optional Fernet key (32-byte url-safe base64)
+
+    # --- upload rules (used by Agent 1's intake boundary) ----------------------
+    max_upload_mb: int = 5
+    allowed_extensions: str = "pdf,docx,txt,md"
+
+    # --- default admin (created on startup by the API layer) -------------------
+    admin_username: str = "admin"
+    admin_password: str = "admin123"
+    admin_email: str = "admin@hirewise.local"
+
+    # --- Agent 1: Candidate Intelligence Agent ----------------------------------
+    candidate_id_prefix: str = "CAND"
+    min_text_chars: int = 200                   # below this the CV is "thin"
+    low_confidence_threshold: float = 0.60      # below this -> low_confidence status
+
+    # optional LLM enhancement (none | gemini | openai | ollama)
+    llm_provider: str = "none"
+    google_api_key: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    llm_model: str | None = None
+
+    # --- Agent 2 scoring rubric (transparent fixed weights) ---------------------
+    weight_mandatory_skills: float = 0.45
+    weight_experience: float = 0.25
+    weight_education: float = 0.15
+    weight_preferred_skills: float = 0.15
+
+    # --- Agent 3 thresholds ------------------------------------------------------
+    matching_confidence_ok: float = 0.55
+    strong_match_min: float = 80.0
+    potential_match_min: float = 65.0
+
+    # --- vector store -------------------------------------------------------------
+    kb_collection: str = "hirewise_kb"
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def allowed_ext_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.allowed_extensions.split(",") if e.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Return the process-wide cached settings instance."""
+    return Settings()
