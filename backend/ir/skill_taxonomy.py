@@ -113,12 +113,18 @@ def all_canonical_skills() -> list[str]:
 
 
 def find_skills_in_text(text: str) -> list[str]:
-    """Return the canonical skills found anywhere in ``text`` (Agent 1)."""
+    """Return the canonical skills found anywhere in ``text`` (Agent 1).
+
+    Uses word-boundary matching so a single-letter skill such as "R" cannot
+    false-match inside words like "Structured".
+    """
     lowered = text.lower()
     found: set[str] = set()
     for canonical, forms in SKILL_SYNONYMS.items():
-        if any(form in lowered for form in forms):
-            found.add(canonical)
+        for form in forms:
+            if re.search(rf"(?<![a-z0-9]){re.escape(form)}(?![a-z0-9])", lowered):
+                found.add(canonical)
+                break
     return sorted(found)
 
 
