@@ -81,6 +81,6 @@ if results:
             if result["warnings"]:
                 for warning in result["warnings"]:
                     st.warning(warning)
-            with st.expander("Privacy report"):
-                st.write(", ".join(item["type"].replace("_", " ").title() for item in result["pii"]["items"]) or "No identifiers detected")
-                st.code(result["pii"]["redacted_text"], language="text")
+            st.markdown("#### Privacy report")
+            st.write(", ".join(item["type"].replace("_", " ").title() for item in result["pii"]["items"]) or "No identifiers detected")
+            st.code(result["pii"]["redacted_text"], language="text")
