@@ -23,13 +23,30 @@ from backend.schemas import PIIItem, PIIReport
 # ---------------------------------------------------------------------------
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
-# Phone: "+94 77 123 4567", "0771234567", "011 234 5678"
+# Phone: "+94 77 123 4567", "0771234567", "011 234 5678", "(011) 234 5678".
+# Three branches so years like "2019 - 2023" and DOBs like "12/05/1992"
+# are never confused with phone numbers.
 _PHONE_RE = re.compile(
-    r"(?<!\d)(?:(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{6,8})(?!\d)"
+    r"(?<!\d)(?:"
+    r"\d{3}[\s.\-]\d{3}[\s.\-]\d{4}"                 # 077 123 4567 / 011-234-5678
+    r"|\(\s?0\d{2}\s?\)[\s.\-]?\d{3}[\s.\-]?\d{4}"   # (011) 234 5678
+    r"|\+\d{1,3}[\s.\-]?\d{1,2}[\s.\-]?\d{3}[\s.\-]?\d{4}"  # +94 77 123 4567
+    r"|0\d{2}[\s.\-]?\d{3}[\s.\-]?\d{4}"             # 0771234567 / 011 234 5678
+    r")(?!\d)"
 )
 
 # Sri Lankan NIC: 9 digits + V/v, or 12 digits (19xx/20xx)
 _NIC_RE = re.compile(r"\b(?:\d{9}[Vv]|(?:19|20)\d{10})\b")
+
+# Inline label - value pairs that can appear mid-line:
+#   "NIC: 923456789V | Date of Birth: 12/05/1992"
+#   "Gender: Female | Marital Status: Married"
+#   "Email: jane@x.com | Phone: +94 77 123 4567"
+_INLINE_LABEL_RE = re.compile(
+    r"(?i)\b(date\s*of\s*birth|\bdob\b|birth\s*date|marital\s+status|"
+    r"nationality|citizenship|religion|ethnicity|"
+    r"phone|tel(?:ephone)?|mobile|whatsapp)\b[^\n]{0,40}"
+)
 
 # Label-led lines (capture the value after the colon)
 _LABEL_LINE_RE = re.compile(
@@ -38,7 +55,8 @@ _LABEL_LINE_RE = re.compile(
     r"address|residence|current\s*address|postal\s*address|"
     r"nationality|citizenship|religion|ethnicity|race|marital\s*status|"
     r"gender|sex|passport(?:\s*(?:no\.?|number|#))?|nic(?:\s*(?:no\.?|number|#))?|"
-    r"id(?:\s*(?:no\.?|number|#))?|identification(?:\s*no\.?)?)"
+    r"id(?:\s*(?:no\.?|number|#))?|identification(?:\s*no\.?)?|"
+    r"phone|tel(?:ephone)?|mobile|whatsapp|e-?mail)"
     r"\s*[:.\-\u2013\u2014]?\s*(?P<value>.+?)\s*$"
 )
 
