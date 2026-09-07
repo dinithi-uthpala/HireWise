@@ -165,6 +165,36 @@ class PIIDetector:
         return spans
 
     def _name_spans(self, text: str) -> list[_Span]:
+        """Name detection: spaCy NER (header block) + first-line heuristic."""
+        spans: list[_Span] = []
+        if self._nlp is not None:
+            doc = self._nlp(text[:1200])
+            for ent in doc.ents:
+                if ent.label_ == "PERSON" and text.count("\n", 0, ent.start_char) <= _HEADER_LINES:
+                    spans.append(_Span(ent.start_char, ent.end_char, "name"))
+        spans += _first_line_name(text)
+        return spans
+
+
+def _Span_to_item(span: _Span, text: str) -> PIIItem:
+    raw = text[span.start : span.end]
+    return PIIItem(type=span.pii_type, detected=_mask(raw), action="redacted")
+
+
+def _mask(value: str) -> str:
+    """Obfuscate a captured value for the privacy report (never raw PII)."""
+    value = " ".join(value.split())
+    if not value:
+        return "\u2026"
+    if "@" in value:  # emails
+        local, _, domain = value.partition("@")
+        return f"{local[:2]}\u2026@{domain}"
+    if value[-1].isdigit():  # IDs / phones
+        return f"{value[:2]}\u2026{value[-1]}"
+    words = value.split()
+    return f"{words[0][:1]}\u2026" if len(words) == 1 else f"{words[0][:1]}\u2026{words[-1][:1]}"
+
+
 # ---------------------------------------------------------------------------
 # Individual detectors
 # ---------------------------------------------------------------------------
