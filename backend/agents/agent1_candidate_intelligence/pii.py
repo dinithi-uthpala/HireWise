@@ -182,6 +182,7 @@ class PIIDetector:
         spans += _marital_spans(text)
         spans += _disability_spans(text)
         spans += _university_spans(text)
+        spans += _inline_label_spans(text)
         spans += _label_led_spans(text)
         spans += self._name_spans(text)
         return spans
@@ -192,8 +193,10 @@ class PIIDetector:
         if self._nlp is not None:
             doc = self._nlp(text[:1200])
             for ent in doc.ents:
-                if ent.label_ == "PERSON" and text.count("\n", 0, ent.start_char) <= _HEADER_LINES:
-                    spans.append(_Span(ent.start_char, ent.end_char, "name"))
+                # skip multi-line PERSON fragments (spaCy header quirk)
+                if ent.label_ == "PERSON" and "\n" not in ent.text:
+                    if text.count("\n", 0, ent.start_char) <= _HEADER_LINES:
+                        spans.append(_Span(ent.start_char, ent.end_char, "name"))
         spans += _first_line_name(text)
         return spans
 
@@ -259,15 +262,36 @@ def _university_spans(text: str) -> list[_Span]:
 
 
 def _label_led_spans(text: str) -> list[_Span]:
-    """Label-led lines: 'Address: 12, Main St' -> type=address, value span only."""
+    """Label-led lines: 'Address: 12, Main St' -> type=address, value span only.
+
+    The value stops at the next inline label so that:
+        "NIC: 923456789V | Date of Birth: 12/05/1992"
+    yields a NIC span for the digits AND lets the DOB inline detector
+    handle the date separately.
+    """
     out: list[_Span] = []
     for m in _LABEL_LINE_RE.finditer(text):
         value = m.group("value").strip()
         if not value:
             continue
         pii_type = _label_to_type(m.group("label").strip().lower())
+        inline = _INLINE_LABEL_RE.search(value)
+        if inline:
+            value = value[: inline.start()].strip().rstrip("|,;-")
+            if not value:
+                continue
         vs = m.start("value") + m.group("value").find(value)
         out.append(_Span(vs, vs + len(value), pii_type))
+    return out
+
+
+def _inline_label_spans(text: str) -> list[_Span]:
+    """Inline 'label: value' pairs found mid-line (e.g. after a `` | `` split)."""
+    out: list[_Span] = []
+    for m in _INLINE_LABEL_RE.finditer(text):
+        label = m.group(0)
+        pii_type = _label_to_type(label.lower())
+        out.append(_Span(m.start(), m.end(), pii_type))
     return out
 
 
