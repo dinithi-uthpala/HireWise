@@ -6,7 +6,7 @@ Parses the *PII-redacted* CV text into a job-relevant, anonymous
 Pipeline (section-aware, deterministic):
     - technical / soft skills     via the shared skill taxonomy
     - education                   degree + qualification-level regex
-    - certifications              "Certified ..." / "Certificate in ..." lines
+    - certifications              "Certified ..." lines
     - work experience             date-range lines grouped into entries
     - job titles / employers      derived from experience entries
     - total experience            summed from date ranges (monthly precision)
@@ -22,41 +22,55 @@ from backend.schemas import CandidateProfile, EducationEntry, ExperienceEntry
 # ---------------------------------------------------------------------------
 # Date helpers
 # ---------------------------------------------------------------------------
-_MONTHS = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
-}
+_MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
 _MONTH_WORDS = (
     r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
     r"jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
 )
 
-# A single date token: "Jan 2021" | "2021" | "01/2021" | "2021-01"
+# A single date token: "Jan 2021" | "2021" | "01/2021".  Prefers the
+# month-qualified form so ``Jan 2021`` keeps its month precision.
+# NOTE: _MONTH_WORDS is an alternation - it MUST be wrapped in its own
+# non-capturing group, otherwise a trailing class like [\s./-] binds only
+# to the last alternative ("dec") and "Jan 2022" silently stops matching.
 _DATE_TOKEN_RE = re.compile(
-    r"(?:" + _MONTH_WORDS + r"[\s./-])?(?:19|20)\d{2}", re.IGNORECASE
+    r"(?:(?:" + _MONTH_WORDS + r")[\s./-](?:19|20)\d{2}|(?:19|20)\d{2})", re.IGNORECASE
 )
 
 # Date range: "Jan 2021 - Present" | "2020 – 2021" | "Mar 2020 to Present"
 _DATE_RANGE_RE = re.compile(
-    r"(?i)(?P<start>(?:" + _MONTH_WORDS + r"[\s./-])?(?:19|20)\d{2})"
-    r"\s*[-–—to]+\s*(?P<end>present|now|current|(?:" + _MONTH_WORDS + r"[\s./-])?(?:19|20)\d{2})"
+    r"(?i)(?P<start>(?:(?:" + _MONTH_WORDS + r")[\s./-])?(?:19|20)\d{2})"
+    r"\s*[-–—to]+\s*(?P<end>present|now|current|(?:(?:" + _MONTH_WORDS + r")[\s./-])?(?:19|20)\d{2})"
 )
 
 _PRESENT_TOKENS = {"present", "now", "current"}
 
 
 def parse_smart_date(token: str) -> tuple[int, int] | None:
-    """Parse a date token -> (year, month) with month 0 for year-only input."""
+    """Parse a date token -> (year, month) with month 0 = year-only."""
     m = _DATE_TOKEN_RE.search(token.strip().strip(".,;"))
     if not m:
         return None
-    text = m.group(0)
-    year = int(re.search(r"(19|20)\d{2}", text).group(0))
+    year = int(re.search(r"(19|20)\d{2}", m.group(0)).group(0))
     month = 0
-    mo = re.search(r"(?i)([a-z]+)", text)
+    mo = re.search(r"(?i)([a-z]+)", m.group(0))
     if mo and mo.group(1).lower()[:3] in _MONTHS:
         month = _MONTHS[mo.group(1).lower()[:3]]
+    return (year, month)
+
+
+def range_months(start_token: str, end_token: str) -> float:
+    """Estimate months spanned by a date range (month granularity)."""
+    start = parse_smart_date(start_token)
+    if start is None:
+        return 0.0
+    if end_token.strip().lower() in _PRESENT_TOKENS:
+        end = (datetime.now().year, datetime.now().month)
+    else:
+        end = parse_smart_date(end_token) or start
+    return max(0.0, float((end[0] - start[0]) * 12 + (end[1] - start[1]) + 1))
 # ---------------------------------------------------------------------------
 # Section headings (case-insensitive, line-start)
 # ---------------------------------------------------------------------------
@@ -75,7 +89,8 @@ _SKILL_ALIASES = {"skills", "technical skills", "professional skills", "core ski
 _EDU_ALIASES = {"education", "academic background", "academic qualifications", "academic history"}
 _EXP_ALIASES = {"experience", "work experience", "employment", "employment history", "career"}
 _PROJ_ALIASES = {"projects", "project", "project experience", "key projects", "academic projects"}
-_CERT_ALIASES = {"certifications", "certification", "certificates", "certificate", "licenses", "licences", "license", "licence"}
+_CERT_ALIASES = {"certifications", "certification", "certificates", "certificate",
+                 "licenses", "licences", "license", "licence"}
 _SUMMARY_ALIASES = {"summary", "profile", "career objective", "objective", "about me"}
 
 
@@ -97,26 +112,19 @@ def split_sections(text: str) -> dict[str, str]:
         sections.setdefault(current, []).append(line)
     return {key: re.sub(r"\n{2,}", "\n", "\n".join(lines)).strip("\n")
             for key, lines in sections.items()}
-    return (year, month)
-
-
-def range_months(start_token: str, end_token: str) -> float:
-    """Estimate months spanned by a date range (month granularity)."""
-    start = parse_smart_date(start_token)
-    if start is None:
-        return 0.0
-    if end_token.strip().lower() in _PRESENT_TOKENS:
-        end = (datetime.now().year, datetime.now().month)
-    else:
-        end = parse_smart_date(end_token) or start
-    return max(0.0, float((end[0] - start[0]) * 12 + (end[1] - start[1]) + 1))
 # ---------------------------------------------------------------------------
 # Skills
 # ---------------------------------------------------------------------------
 def extract_skills(sections: dict[str, str], full_text: str) -> tuple[list[str], list[str]]:
-    """Technical skills prefer the skills section; fall back to full text."""
+    """Technical skills prefer the skills section; fall back to full text.
+
+    Soft skills are separated out so the technical-skills list stays
+    job-relevant for Agent 2's matching.
+    """
     target = next((sections[key] for key in sections if key in _SKILL_ALIASES), "") or full_text
-    return find_skills_in_text(target), find_soft_skills_in_text(target)
+    soft = find_soft_skills_in_text(target)
+    technical = [s for s in find_skills_in_text(target) if s not in soft]
+    return technical, soft
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +173,8 @@ def _parse_degree_line(line: str) -> tuple[str, str, str]:
     if subj:
         subject = subj.group(1).strip()
     return cleaned, level, subject
+
+
 # ---------------------------------------------------------------------------
 # Certifications
 # ---------------------------------------------------------------------------
@@ -183,7 +193,10 @@ def extract_certifications(sections: dict[str, str]) -> list[str]:
         return out
     for line in block.splitlines():
         if _CERT_START_RE.match(line):
-            cert = _CERT_START_RE.sub("", line).strip().strip(".,;")
+            cert = _CERT_START_RE.sub("", line).strip()
+            # drop a leftover connector such as "in SQL for Data Science"
+            cert = re.sub(r"^(?:in|for|of)\s+", "", cert, flags=re.IGNORECASE)
+            cert = cert.strip().strip(".,;")
             if cert and cert.lower() not in {c.lower() for c in out}:
                 out.append(cert)
     return out
@@ -213,6 +226,46 @@ def extract_experience(sections: dict[str, str]) -> list[ExperienceEntry]:
         m = _DATE_RANGE_RE.search(line)
         if m:
             if current is not None:
+                entries.append(current)  # previous entry finished
+            current = ExperienceEntry(
+                role=_role_from_line(line, m),
+                employer=_employer_from_line(line, m),
+                start=m.group("start").strip(),
+                end=m.group("end").strip(),
+                months=range_months(m.group("start"), m.group("end")),
+                summary=line,
+            )
+        elif current is not None and len(line) > 3:
+            current.summary = f"{current.summary} {line}".strip()
+            if not current.role:
+                hint = _JOB_HINT_RE.search(line)
+                if hint:
+                    current.role = hint.group(1)
+    if current is not None:
+        entries.append(current)
+    return [e for e in entries if e.months > 0 or e.role or e.employer]
+
+
+def _role_from_line(line: str, m: re.Match) -> str:
+    """Role comes from the text *before* the date range (first segment)."""
+    before = line[: m.start()].strip(" -–—|,;:")
+    hint = _JOB_HINT_RE.search(before)
+    if hint:
+        return hint.group(1)
+    segments = [p.strip() for p in re.split(r"[|,;]", before) if p.strip()]
+    return segments[0] if segments else re.sub(r"^[-•▪◦*]\s*", "", before).strip()
+
+
+def _employer_from_line(line: str, m: re.Match) -> str:
+    """Employer is the segment before the date range that is not the role."""
+    before = line[: m.start()].strip(" -–—|,;:")
+    segments = [p.strip() for p in re.split(r"[|,;]", before) if p.strip()]
+    if len(segments) < 2:
+        return ""
+    employer = segments[-1]
+    return re.sub(r"^[-•▪◦*]\s*", "", employer).strip()
+
+
 # ---------------------------------------------------------------------------
 # Job titles / employers / projects / summary
 # ---------------------------------------------------------------------------
@@ -277,36 +330,4 @@ def extract_profile(candidate_id: str, redacted_text: str) -> CandidateProfile:
         total_experience_years=round(total_months / 12.0, 2),
         summary=extract_summary(sections),
     )
-                entries.append(current)  # previous entry finished
-            current = ExperienceEntry(
-                role=_role_from_line(line, m),
-                employer=_employer_from_line(line, m),
-                start=m.group("start").strip(),
-                end=m.group("end").strip(),
-                months=range_months(m.group("start"), m.group("end")),
-                summary=line,
-            )
-        elif current is not None and len(line) > 3:
-            current.summary = f"{current.summary} {line}".strip()
-            if not current.role:
-                hint = _JOB_HINT_RE.search(line)
-                if hint:
-                    current.role = hint.group(1)
-    if current is not None:
-        entries.append(current)
-    return [e for e in entries if e.months > 0 or e.role or e.employer]
-
-
-def _role_from_line(line: str, m: re.Match) -> str:
-    before = line[: m.start()].strip(" -–—|,;:")
-    hint = _JOB_HINT_RE.search(before)
-    if hint:
-        return hint.group(1)
-    return re.sub(r"^[-•▪◦*]\s*", "", before).strip()
-
-
-def _employer_from_line(line: str, m: re.Match) -> str:
-    after = line[m.end() : m.end() + 60].strip(" -–—|,;:")
-    if not after:
-        return ""
-    return re.split(r"[,;|]", after, maxsplit=1)[0].strip()
+# ---APPEND-MARKER---
