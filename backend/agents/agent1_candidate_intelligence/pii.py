@@ -87,6 +87,26 @@ _PLACEHOLDER: dict[str, str] = {
     "address": "[ADDRESS]",
     "dob": "[DOB]",
     "age": "[AGE]",
+    "gender": "[GENDER]",
+    "religion": "[RELIGION]",
+    "ethnicity": "[ETHNICITY]",
+    "marital_status": "[MARITAL_STATUS]",
+    "disability": "[DISABILITY]",
+    "nationality": "[NATIONALITY]",
+    "university": "[UNIVERSITY]",
+}
+
+
+@dataclass(slots=True)
+class _Span:
+    start: int
+    end: int
+    pii_type: str
+
+    def overlap(self, other: "_Span") -> bool:
+        return self.start < other.end and other.start < self.end
+
+
 # ---------------------------------------------------------------------------
 # Core detector class
 # ---------------------------------------------------------------------------
