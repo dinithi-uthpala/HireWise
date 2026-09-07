@@ -252,6 +252,49 @@ def _label_to_type(label: str) -> str:
         return "nic"
     if "address" in label or "residence" in label:
         return "address"
+# ---------------------------------------------------------------------------
+# Span merging + redaction
+# ---------------------------------------------------------------------------
+def _merge_spans(spans: list[_Span]) -> list[_Span]:
+    """Remove overlaps: when two spans collide, keep the longer one."""
+    spans = sorted(spans, key=lambda s: (s.start, -(s.end - s.start)))
+    merged: list[_Span] = []
+    for span in spans:
+        if merged and merged[-1].overlap(span):
+            prev = merged[-1]
+            if (span.end - span.start) > (prev.end - prev.start):
+                merged[-1] = span
+            continue
+        merged.append(span)
+    return merged
+
+
+def _apply_spans(text: str, spans: list[_Span]) -> str:
+    """Replace each span with its placeholder token."""
+    if not spans:
+        return text
+    parts: list[str] = []
+    cursor = 0
+    for span in spans:
+        if span.start > cursor:
+            parts.append(text[cursor : span.start])
+        parts.append(_PLACEHOLDER.get(span.pii_type, "[REDACTED]"))
+        cursor = span.end
+    parts.append(text[cursor:])
+    return _collapse_placeholders("".join(parts))
+
+
+def _collapse_placeholders(text: str) -> str:
+    """Merge duplicated adjacent placeholders from overlapping spans."""
+    return re.sub(r"(\[(?:[A-Z_]+)\])\s*\1", r"\1", text)
+
+
+# ---------------------------------------------------------------------------
+# Convenience API
+# ---------------------------------------------------------------------------
+def redact_pii(text: str) -> PIIReport:
+    """One-shot PII redaction using a default detector."""
+    return PIIDetector().redact(text)
     if "name" in label:
         return "name"
     return "other"
