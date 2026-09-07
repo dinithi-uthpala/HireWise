@@ -1,0 +1,35 @@
+# ============================================================
+# HireWise BACKEND dependencies (FastAPI multi-agent system)
+# ------------------------------------------------------------
+# Install:  py -m pip install -r requirements-backend.txt
+# ============================================================
+
+# --- Web framework ---------------------------------------------------------
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9          # file uploads
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+sqlmodel>=0.0.22                # SQLAlchemy + Pydantic ORM
+
+# --- Databases ---------------------------------------------------------------
+# SQLite comes with Python (default for demo)
+psycopg2-binary>=2.9.9           # PostgreSQL driver (production)
+
+# --- Information Retrieval (vector database) ---------------------------------
+chromadb>=0.5.0
+
+# --- Document / text parsing -------------------------------------------------
+PyMuPDF>=1.24.0                  # PDF extraction  (import: fitz)
+python-docx>=1.1.0               # DOCX extraction
+spacy>=3.7.0                     # NER for PII detection
+regex>=2023.12.25
+
+# --- Security -----------------------------------------------------------------
+PyJWT>=2.8.0                     # JWT auth
+bcrypt>=4.1.0                    # password hashing
+cryptography>=42.0.0             # Fernet encryption for stored CVs
+
+# --- Testing / tooling ----------------------------------------------------------
+pytest>=8.0.0
+httpx>=0.27.0

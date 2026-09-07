@@ -1,0 +1,12 @@
+# ============================================================
+# HireWise FRONTEND dependencies (Streamlit recruiter dashboard)
+# ------------------------------------------------------------
+# Install:  py -m pip install -r requirements-frontend.txt
+# ============================================================
+
+streamlit>=1.36.0
+requests>=2.31.0                 # calls the FastAPI backend
+pandas>=2.2.0                    # tables + ranking
+plotly>=5.22.0                   # score-breakdown / gap charts
+python-dotenv>=1.0.1             # read .env for API base URL
+pillow>=10.0.0                   # image handling (screenshots, logos)
