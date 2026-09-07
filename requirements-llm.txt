@@ -1,0 +1,16 @@
+# ============================================================
+# Optional LLM providers for HireWise
+# ------------------------------------------------------------
+# The system works fully without any of these (deterministic
+# NLP + rule-based pipeline). Installing them + the matching
+# *_API_KEY in .env upgrades Agents 1 & 3 to LLM-enhanced mode.
+# ============================================================
+
+# Google Gemini
+google-generativeai>=0.7.0
+
+# OpenAI compatible (GPT-4o mini, GPT-4.1-mini, ...)
+openai>=1.35.0
+
+# Local LLM via Ollama (llama3 / qwen2.5 ...) -- add "ollama" to the
+# LLM_MODEL if you use this provider locally.
