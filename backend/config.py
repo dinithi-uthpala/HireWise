@@ -8,6 +8,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,16 @@ class Settings(BaseSettings):
     candidate_id_prefix: str = "CAND"
     min_text_chars: int = 200                   # below this the CV is "thin"
     low_confidence_threshold: float = 0.60      # below this -> low_confidence status
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value: object) -> object:
+        """Treat unrelated environment log-level values as the default."""
+        if isinstance(value, str) and value.strip().lower() not in {
+            "1", "true", "yes", "on", "0", "false", "no", "off"
+        }:
+            return True
+        return value
 
     # optional LLM enhancement (none | gemini | openai | ollama)
     llm_provider: str = "none"

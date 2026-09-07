@@ -392,9 +392,6 @@ def _collapse_placeholders(text: str) -> str:
 def redact_pii(text: str) -> PIIReport:
     """One-shot PII redaction using a default detector."""
     return PIIDetector().redact(text)
-    if "name" in label:
-        return "name"
-    return "other"
 
 
 def _first_line_name(text: str) -> list[_Span]:
@@ -416,6 +413,8 @@ def _first_line_name(text: str) -> list[_Span]:
         return []
     start = len(first) - len(first.lstrip())
     return [_Span(start, start + len(first.strip()), "name")]
+
+
 def _mask(value: str) -> str:
     """Obfuscate a captured value for the privacy report (never raw PII)."""
     value = " ".join(value.split())

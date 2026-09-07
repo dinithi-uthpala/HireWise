@@ -1,16 +1,17 @@
-"""HireWise Recruiter Dashboard - Streamlit entry point.
+"""HireWise Recruiter Dashboard entry point."""
+from __future__ import annotations
 
-Run with:
-    cd frontend
-    streamlit run app.py
+import os
 
-The app is a small internal HR dashboard for the multi-agent demo:
-    Login -> Create Job -> Upload CVs -> Agent pipeline ->
-    Candidate Ranking -> Candidate Detail (evidence, gaps, confidence) ->
-    Human Decision -> Audit trail.
+import streamlit as st
 
-Uses Streamlit's native multipage layout: extra screens live in `pages/`.
-The frontend calls the FastAPI backend (`API_BASE_URL` from `.env`).
-"""
+st.set_page_config(page_title="HireWise", page_icon="H", layout="wide")
+st.title("HireWise")
+st.caption("AI-assisted recruitment workspace")
 
-# TODO(Team): add login, job creation, CV upload + agent pipeline UI here.
+st.info("Use **Upload CVs** in the sidebar to run Candidate Intelligence Agent 1.")
+st.session_state.setdefault("agent1_results", [])
+st.metric("Processed candidates", len(st.session_state["agent1_results"]))
+
+if "API_BASE_URL" not in os.environ:
+    st.caption("Backend URL: http://127.0.0.1:8000")

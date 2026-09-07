@@ -9,7 +9,7 @@ Agent 2 / Agent 3 will add their models here as they are built.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -102,4 +102,4 @@ class AgentActivityOut(BaseModel):
     action: str = ""
     status: str = "ok"               # running | ok | warning | error
     payload: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

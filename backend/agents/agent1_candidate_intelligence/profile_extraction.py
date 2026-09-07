@@ -53,7 +53,10 @@ def parse_smart_date(token: str) -> tuple[int, int] | None:
     m = _DATE_TOKEN_RE.search(token.strip().strip(".,;"))
     if not m:
         return None
-    year = int(re.search(r"(19|20)\d{2}", m.group(0)).group(0))
+    year_match = re.search(r"(19|20)\d{2}", m.group(0))
+    if year_match is None:
+        return None
+    year = int(year_match.group(0))
     month = 0
     mo = re.search(r"(?i)([a-z]+)", m.group(0))
     if mo and mo.group(1).lower()[:3] in _MONTHS:

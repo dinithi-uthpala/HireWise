@@ -46,7 +46,7 @@ def extract_pdf(data: bytes) -> str:
         raise TextExtractionError(f"Failed to open PDF: {exc}") from exc
 
     try:
-        pages = [page.get_text() for page in document]
+        pages: list[str] = [str(page.get_text()) for page in document]
     except Exception as exc:
         raise TextExtractionError(f"Failed to read PDF pages: {exc}") from exc
     finally:

@@ -34,7 +34,6 @@ from backend.schemas import ExtractionResult
 
 from .confidence import (
     compute_confidence,
-    is_unreadable,
     parse_status_for,
     warnings_for,
 )
