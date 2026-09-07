@@ -168,6 +168,114 @@ def _Span_to_item(span: _Span, text: str) -> PIIItem:
     return PIIItem(type=span.pii_type, detected=_mask(raw), action="redacted")
 
 
+# ---------------------------------------------------------------------------
+# Individual detectors
+# ---------------------------------------------------------------------------
+def _emails(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "email") for m in _EMAIL_RE.finditer(text)]
+
+
+def _phones(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "phone") for m in _PHONE_RE.finditer(text)]
+
+
+def _nic_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "nic") for m in _NIC_RE.finditer(text)]
+
+
+def _age_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "age") for m in _AGE_RE.finditer(text)]
+
+
+def _gender_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "gender") for m in _GENDER_RE.finditer(text)]
+
+
+def _honorific_spans(text: str) -> list[_Span]:
+    """Redact gender-implying honorifics (Mr/Mrs/Ms/Miss/Mx) when they prefix
+    a capitalized name token. Professional titles (Dr/Prof/Eng) are kept."""
+    out: list[_Span] = []
+    for m in _HONORIFIC_RE.finditer(text):
+        word = text[m.start() : m.end()].lower().strip(".")
+        if word in {"mr", "mrs", "ms", "miss", "mx"}:
+            after = text[m.end() : m.end() + 30].lstrip()
+            if after and after[0].isupper():
+                out.append(_Span(m.start(), m.end(), "gender"))
+    return out
+
+
+def _religion_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "religion") for m in _RELIGION_RE.finditer(text)]
+
+
+def _marital_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "marital_status") for m in _MARITAL_RE.finditer(text)]
+
+
+def _disability_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "disability") for m in _DISABILITY_RE.finditer(text)]
+
+
+def _university_spans(text: str) -> list[_Span]:
+    return [_Span(m.start(), m.end(), "university") for m in _UNIVERSITY_RE.finditer(text)]
+
+
+def _label_led_spans(text: str) -> list[_Span]:
+    """Label-led lines: 'Address: 12, Main St' -> type=address, value span only."""
+    out: list[_Span] = []
+    for m in _LABEL_LINE_RE.finditer(text):
+        value = m.group("value").strip()
+        if not value:
+            continue
+        pii_type = _label_to_type(m.group("label").strip().lower())
+        vs = m.start("value") + m.group("value").find(value)
+        out.append(_Span(vs, vs + len(value), pii_type))
+    return out
+
+
+def _label_to_type(label: str) -> str:
+    if "birth" in label or label == "dob":
+        return "dob"
+    if "nationality" in label or "citizenship" in label:
+        return "nationality"
+    if "religion" in label:
+        return "religion"
+    if "ethnicity" in label or label == "race":
+        return "ethnicity"
+    if "marital" in label:
+        return "marital_status"
+    if "gender" in label or label == "sex":
+        return "gender"
+    if "passport" in label:
+        return "passport"
+    if label in ("nic", "id", "identification") or label.startswith(("nic", "id")):
+        return "nic"
+    if "address" in label or "residence" in label:
+        return "address"
+    if "name" in label:
+        return "name"
+    return "other"
+
+
+def _first_line_name(text: str) -> list[_Span]:
+    """The classic two-line header: `Jane Doe` followed by contact lines."""
+    lines = text.splitlines()
+    header_block = lines[: _HEADER_LINES + 1]
+    if len(header_block) < 2:
+        return []
+    first = header_block[0].strip()
+    words = first.split()
+    if len(words) < 2 or len(words) > 5:
+        return []
+    if any(word.lower() in _HEADER_WORDS for word in words):
+        return []
+    if any(not word[0].isupper() for word in words if word):
+        return []
+    contact_after = "\n".join(header_block[1:]).lower()
+    if not any(marker in contact_after for marker in ("@", "tel", "phone", "mobile", "contact", "+")):
+        return []
+    start = len(first) - len(first.lstrip())
+    return [_Span(start, start + len(first.strip()), "name")]
 def _mask(value: str) -> str:
     """Obfuscate a captured value for the privacy report (never raw PII)."""
     value = " ".join(value.split())
