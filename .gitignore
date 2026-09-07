@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- HireWise runtime artifacts ------------------------------------------
+# Local database + generated runtime data (created on first run)
+data/
+# Encrypted stored CV files
+storage/
+# ChromaDB vector store (seeded by scripts/seed_kb.py)
+chroma_db/
+# Local environment secrets
+.env
+# Streamlit cache
+frontend/.streamlit/
