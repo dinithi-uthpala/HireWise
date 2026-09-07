@@ -351,21 +351,3 @@ def _mask(value: str) -> str:
         return f"{value[:2]}\u2026{value[-1]}"
     words = value.split()
     return f"{words[0][:1]}\u2026" if len(words) == 1 else f"{words[0][:1]}\u2026{words[-1][:1]}"
-    "gender": "[GENDER]",
-    "religion": "[RELIGION]",
-    "ethnicity": "[ETHNICITY]",
-    "marital_status": "[MARITAL_STATUS]",
-    "disability": "[DISABILITY]",
-    "nationality": "[NATIONALITY]",
-    "university": "[UNIVERSITY]",
-}
-
-
-@dataclass(slots=True)
-class _Span:
-    start: int
-    end: int
-    pii_type: str
-
-    def overlap(self, other: "_Span") -> bool:
-        return self.start < other.end and other.start < self.end
