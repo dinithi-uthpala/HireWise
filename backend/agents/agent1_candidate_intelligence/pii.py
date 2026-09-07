@@ -314,21 +314,56 @@ def _label_to_type(label: str) -> str:
         return "nic"
     if "address" in label or "residence" in label:
         return "address"
+    if "name" in label:
+        return "name"
+    if any(tok in label for tok in ("phone", "tel", "mobile", "whatsapp")):
+        return "phone"
+    if "mail" in label:
+        return "email"
+    return "other"
 # ---------------------------------------------------------------------------
 # Span merging + redaction
 # ---------------------------------------------------------------------------
+# Span-merging priority: when two spans overlap, the more specific PII type
+# wins (e.g. the `phone` inside a label-led `email` span). Ties go longer.
+_TYPE_PRIORITY: dict[str, int] = {
+    "dob": 90,
+    "age": 90,
+    "nic": 80,
+    "passport": 80,
+    "marital_status": 70,
+    "name": 60,
+    "email": 60,
+    "phone": 60,
+    "address": 60,
+    "gender": 50,
+    "religion": 40,
+    "ethnicity": 40,
+    "nationality": 40,
+    "disability": 40,
+    "university": 30,
+    "other": 10,
+}
+
+
 def _merge_spans(spans: list[_Span]) -> list[_Span]:
-    """Remove overlaps: when two spans collide, keep the longer one."""
+    """Resolve overlaps: the more specific PII type wins; ties keep longest."""
     spans = sorted(spans, key=lambda s: (s.start, -(s.end - s.start)))
     merged: list[_Span] = []
     for span in spans:
-        if merged and merged[-1].overlap(span):
-            prev = merged[-1]
-            if (span.end - span.start) > (prev.end - prev.start):
-                merged[-1] = span
+        if not merged or not merged[-1].overlap(span):
+            merged.append(span)
             continue
-        merged.append(span)
+        prev = merged[-1]
+        if _priority(span) > _priority(prev):
+            merged[-1] = span
+        elif _priority(span) == _priority(prev) and (span.end - span.start) > (prev.end - prev.start):
+            merged[-1] = span
     return merged
+
+
+def _priority(span: _Span) -> int:
+    return _TYPE_PRIORITY.get(span.pii_type, 0)
 
 
 def _apply_spans(text: str, spans: list[_Span]) -> str:
