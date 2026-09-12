@@ -168,6 +168,59 @@ def test_preferred_skill_is_not_overridden_by_later_required_education_clause() 
     assert "Power BI" not in requirements.mandatory_skills
 
 
+def test_explicit_required_skill_is_mandatory() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "Required: Python, SQL",
+    )
+
+    assert requirements.mandatory_skills == ["Python", "SQL"]
+
+
+def test_must_have_and_must_know_skills_are_mandatory() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "Must have Python experience. Candidates must know SQL.",
+    )
+
+    assert "Python" in requirements.mandatory_skills
+    assert "SQL" in requirements.mandatory_skills
+
+
+def test_optional_skill_markers_are_not_mandatory() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "Nice to have: Power BI. Preferred experience with Pandas. Bonus skills include Tableau.",
+    )
+
+    assert set(requirements.preferred_skills) == {"Power BI", "Pandas", "Tableau"}
+    assert requirements.mandatory_skills == []
+
+
+def test_contextual_skill_mentions_are_not_requirements() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "You will work with Python and SQL. Our team uses Power BI. "
+        "The system is built using Pandas.",
+    )
+
+    assert requirements.mandatory_skills == []
+    assert requirements.preferred_skills == []
+
+
+def test_missing_contextual_skill_does_not_create_required_gap_or_penalty() -> None:
+    candidate = candidate_profile()
+    contextual_job, _ = extract_job_requirements(
+        "Developer",
+        "Required: Python. You will work with Power BI.",
+    )
+    result = score_candidate(candidate, contextual_job)
+
+    assert contextual_job.mandatory_skills == ["Python"]
+    assert not any(gap.skill == "Power BI" for gap in result.skill_gaps)
+    assert result.match_score == 100.0
+
+
 def test_empty_job_requirements_do_not_produce_a_perfect_match() -> None:
     result = match_candidate_to_job(
         candidate_profile(),

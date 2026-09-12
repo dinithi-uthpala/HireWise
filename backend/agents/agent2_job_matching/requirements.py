@@ -15,7 +15,9 @@ from backend.security.sanitize import strip_prompt_injections
 
 
 _MANDATORY_CONTEXT = re.compile(
-    r"\b(?:required|must[- ]have|mandatory|essential)\b", re.IGNORECASE
+    r"\b(?:required|mandatory|essential)\b"
+    r"|\bmust[- ](?:have|know|use)\b",
+    re.IGNORECASE,
 )
 _PREFERRED_CONTEXT = re.compile(
     r"\b(?:preferred|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|advantage)\b",
@@ -125,10 +127,10 @@ def _classify_skills(description: str, skills: list[str]) -> tuple[list[str], li
 
     for skill in skills:
         clause = _skill_clause(clauses, skill)
-        if _PREFERRED_CONTEXT.search(clause) and not _MANDATORY_CONTEXT.search(clause):
-            preferred.append(skill)
-        else:
+        if _MANDATORY_CONTEXT.search(clause):
             mandatory.append(skill)
+        elif _PREFERRED_CONTEXT.search(clause):
+            preferred.append(skill)
     return mandatory, preferred
 
 
