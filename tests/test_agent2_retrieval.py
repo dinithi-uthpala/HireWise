@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.ir.knowledge_base import seed_knowledge_base
+from backend.ir.knowledge_base import load_knowledge_documents, seed_knowledge_base
 from backend.ir.vector_store import retrieve_relevant_criteria
 
 
@@ -68,3 +68,13 @@ def test_knowledge_base_retrieves_hr_guidance(tmp_path: Path) -> None:
 
 def test_empty_query_returns_no_results(tmp_path: Path) -> None:
     assert retrieve_relevant_criteria("", persist_directory=tmp_path / "chroma") == []
+
+
+def test_production_knowledge_base_documents_load_with_metadata() -> None:
+    documents = load_knowledge_documents()
+
+    assert len(documents) >= 10
+    assert all(document.document_id for document in documents)
+    assert all(document.source.endswith(".md") for document in documents)
+    assert all(document.category for document in documents)
+    assert all(document.content.strip() for document in documents)

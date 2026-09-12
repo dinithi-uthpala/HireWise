@@ -176,6 +176,36 @@ def test_job_creation_rejects_invalid_job_id() -> None:
     assert response.status_code == 422
 
 
+def test_job_creation_generates_job_id_when_omitted() -> None:
+    response = client.post(
+        "/api/agent2/jobs",
+        json={
+            "job_title": "Generated ID Analyst",
+            "job_description": "Required skills: Python.",
+        },
+    )
+
+    assert response.status_code == 201
+    job_id = response.json()["job_id"]
+    assert job_id.startswith("JOB-")
+    assert len(job_id) == 16
+
+
+def test_job_creation_rejects_duplicate_job_id() -> None:
+    job_id = f"JOB-DUPLICATE-{uuid4().hex[:8].upper()}"
+    payload = {
+        "job_id": job_id,
+        "job_title": "Duplicate Test Analyst",
+        "job_description": "Required skills: Python.",
+    }
+
+    first_response = client.post("/api/agent2/jobs", json=payload)
+    second_response = client.post("/api/agent2/jobs", json=payload)
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 409
+
+
 def test_matching_rejects_unknown_persisted_job_id() -> None:
     request = {
         **VALID_REQUEST,
@@ -217,3 +247,26 @@ def test_existing_direct_matching_remains_compatible() -> None:
 
     assert response.status_code == 200
     assert response.json()["job_id"] == "JOB-API-001"
+
+
+def test_api_serializes_structured_uncertainty_fields() -> None:
+    request = {
+        **VALID_REQUEST,
+        "candidate": {
+            **VALID_REQUEST["candidate"],
+            "summary": "Worked with data tools on reporting projects.",
+        },
+        "job_description": "Required skills: Power BI.",
+    }
+
+    response = client.post("/api/agent2/match", json=request)
+
+    assert response.status_code == 200
+    uncertain_matches = response.json()["uncertain_matches"]
+    assert uncertain_matches
+    assert set(uncertain_matches[0]) == {
+        "requirement_type",
+        "requirement",
+        "reason",
+        "candidate_evidence",
+    }

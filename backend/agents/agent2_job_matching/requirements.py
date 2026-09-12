@@ -53,6 +53,14 @@ _REQUIREMENT_SECTION_HEADINGS = re.compile(
     r"(?:skills?|education|qualifications?|experience|responsibilit(?:y|ies)|"
     r"duties|tasks|certifications?|licenses?|licences?)\s*:"
 )
+_CERTIFICATION_PROSE_START = re.compile(
+    r"(?i)^\s*(?:candidates?|applicants?|this\s+role|the\s+role|please\s+|"
+    r"must\s+|should\s+|responsibilities?\b|experience\b)"
+)
+_CERTIFICATION_PROVIDER = re.compile(
+    r"(?i)\b(?:aws|amazon|microsoft|azure|google|gcp|ibm|cisco|oracle|"
+    r"comptia|salesforce|kubernetes|pmi|isc2)\b"
+)
 
 
 def extract_job_requirements(
@@ -203,14 +211,17 @@ def _extract_certifications(description: str) -> list[str]:
             in_section = True
             remainder = re.sub(_CERTIFICATION_HEADINGS, "", stripped).strip(" :-")
             if remainder:
-                _append_items(output, remainder)
+                _append_certification_items(output, remainder)
             continue
         if in_section:
             if _REQUIREMENT_SECTION_HEADINGS.match(stripped):
                 in_section = False
                 continue
+            if _CERTIFICATION_PROSE_START.match(stripped):
+                in_section = False
+                continue
             if stripped:
-                _append_items(output, stripped)
+                _append_certification_items(output, stripped)
     return output[:20]
 
 
@@ -220,3 +231,22 @@ def _append_items(output: list[str], line: str) -> None:
         cleaned = re.sub(r"^[-*•▪◦]\s*", "", item).strip(" .,:")
         if cleaned and cleaned.lower() not in {value.lower() for value in output}:
             output.append(cleaned)
+
+
+def _append_certification_items(output: list[str], line: str) -> None:
+    """Split certification lists without splitting ordinary name commas."""
+    for item in re.split(r"[;|]", line):
+        cleaned = item.strip(" .,:;")
+        if not cleaned:
+            continue
+        comma_parts = [part.strip() for part in cleaned.split(",")]
+        if len(comma_parts) > 1 and all(
+            _CERTIFICATION_PROVIDER.search(part) for part in comma_parts[1:]
+        ):
+            parts = comma_parts
+        else:
+            parts = [cleaned]
+        for part in parts:
+            value = re.sub(r"^[-*•▪◦]\s*", "", part).strip(" .,:;")
+            if value and value.lower() not in {entry.lower() for entry in output}:
+                output.append(value)

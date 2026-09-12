@@ -316,12 +316,34 @@ def test_multiple_inline_certification_names_are_extracted() -> None:
     ]
 
 
+def test_comma_separated_inline_certifications_are_extracted() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications: AWS Solutions Architect, Microsoft Azure Administrator",
+    )
+
+    assert requirements.required_certifications == [
+        "AWS Solutions Architect",
+        "Microsoft Azure Administrator",
+    ]
+
+
 def test_certification_extraction_stops_at_next_requirement_section() -> None:
     requirements, _ = extract_job_requirements(
         "Cloud Administrator",
         "Required certifications:\nAWS Solutions Architect\n"
         "Responsibilities:\nManage cloud infrastructure\n"
         "Preferred skills: Python",
+    )
+
+    assert requirements.required_certifications == ["AWS Solutions Architect"]
+
+
+def test_certification_extraction_stops_at_unrelated_prose() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications:\nAWS Solutions Architect\n"
+        "Candidates should provide evidence of cloud experience.",
     )
 
     assert requirements.required_certifications == ["AWS Solutions Architect"]
