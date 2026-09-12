@@ -164,7 +164,9 @@ def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchRe
             candidate_education=candidate_education,
             required_education=job.required_education_level,
             education_match_status=_education_match_status(
-                education_percentage, education_required
+                education_percentage,
+                education_required,
+                _education_rank(job.required_education_level) > 0,
             ),
             education_contribution=education_contribution,
             required_certifications=job.required_certifications,
@@ -254,6 +256,13 @@ def _build_uncertain_matches(
             ))
 
     required_education = job.required_education_level.strip()
+    if required_education and _education_rank(required_education) == 0:
+        uncertain.append(UncertainMatch(
+            requirement_type="education",
+            requirement=required_education,
+            reason="Education requirement could not be mapped to a recognized education level.",
+            candidate_evidence="; ".join(_candidate_education_labels(candidate)),
+        ))
     if required_education and candidate.education:
         if max(
             (_education_rank(entry.qualification_level or entry.degree)
@@ -340,9 +349,15 @@ def _education_certification_shares(
     return 0.0, 0.0
 
 
-def _education_match_status(score: float, required: bool) -> str:
+def _education_match_status(
+    score: float,
+    required: bool,
+    requirement_known: bool,
+) -> str:
     if not required:
         return "not_required"
+    if not requirement_known:
+        return "uncertain"
     if score >= 100.0:
         return "matched"
     if score > 0.0:
@@ -436,7 +451,7 @@ def _education_score(candidate: CandidateProfile, required_level: str) -> float:
     """Compare education levels without using institution names."""
     required = _education_rank(required_level)
     if required == 0:
-        return 100.0
+        return 100.0 if not required_level.strip() else 0.0
 
     candidate_rank = max(
         (_education_rank(entry.qualification_level or entry.degree) for entry in candidate.education),

@@ -197,7 +197,7 @@ class EducationScoreEvidence(BaseModel):
     score: float = Field(default=0.0, ge=0, le=15)
     candidate_education: list[str] = Field(default_factory=list)
     required_education: str = ""
-    education_match_status: Literal["matched", "partial", "missing", "not_required"] = "not_required"
+    education_match_status: Literal["matched", "partial", "missing", "uncertain", "not_required"] = "not_required"
     education_contribution: float = Field(default=0.0, ge=0, le=15)
     required_certifications: list[str] = Field(default_factory=list)
     matched_certifications: list[str] = Field(default_factory=list)

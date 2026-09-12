@@ -532,6 +532,43 @@ def test_unmapped_education_evidence_is_flagged() -> None:
     assert any(item.requirement_type == "education" for item in result.uncertain_matches)
 
 
+def test_unknown_education_requirement_does_not_receive_full_credit() -> None:
+    result = score_candidate(
+        candidate_profile(),
+        JobRequirement(required_education_level="professional qualification"),
+    )
+
+    assert result.score_breakdown.education == 0.0
+    assert result.score_evidence.education.education_match_status == "uncertain"
+    assert any(
+        item.requirement_type == "education"
+        and item.requirement == "professional qualification"
+        for item in result.uncertain_matches
+    )
+
+
+def test_unknown_education_requirement_is_reported_during_extraction() -> None:
+    requirements, warnings = extract_job_requirements(
+        "Analyst",
+        "Required education: professional qualification",
+    )
+
+    assert requirements.required_education_level == ""
+    assert any("education level" in warning.lower() for warning in warnings)
+
+
+def test_missing_candidate_education_is_not_treated_as_uncertain_requirement() -> None:
+    candidate = candidate_profile().model_copy(update={"education": []})
+    result = score_candidate(
+        candidate,
+        JobRequirement(required_education_level="bachelor"),
+    )
+
+    assert result.score_breakdown.education == 0.0
+    assert result.score_evidence.education.education_match_status == "missing"
+    assert not any(item.requirement_type == "education" for item in result.uncertain_matches)
+
+
 def test_ambiguous_certification_evidence_is_flagged() -> None:
     candidate = candidate_profile().model_copy(update={"certifications": ["AWS"]})
     result = score_candidate(
