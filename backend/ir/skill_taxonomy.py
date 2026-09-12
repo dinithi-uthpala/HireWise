@@ -18,8 +18,8 @@ import re
 SKILL_SYNONYMS: dict[str, set[str]] = {
     # --- programming / query languages --------------------------------------
     "Python": {"python", "python3", "python 3", "py"},
-    "SQL": {"sql", "structured query language", "mysql", "postgresql", "postgres",
-            "pl/sql", "tsql", "t-sql", "ms sql server", "mssql", "sqlite", "pyspark sql"},
+        "SQL": {"sql", "structured query language", "mysql", "postgresql", "postgres",
+            "pl/sql", "mssql", "sqlite", "pyspark sql"},
     "R": {"r", "r language", "r programming"},
     "Java": {"java", "java 11", "java 17"},
     "JavaScript": {"javascript", "js", "ecmascript", "typescript"},
@@ -80,7 +80,7 @@ SKILL_SYNONYMS: dict[str, set[str]] = {
 }
 
 # SQL Server synonyms kept separate for readability.
-SKILL_SYNONYMS["SQL Server"] = {"sql server", "ms sql server", "tsql"}
+SKILL_SYNONYMS["SQL Server"] = {"sql server", "ms sql server", "tsql", "t-sql"}
 
 _CACHE: dict[str, str] = {}
 
@@ -119,13 +119,25 @@ def find_skills_in_text(text: str) -> list[str]:
     false-match inside words like "Structured".
     """
     lowered = text.lower()
-    found: set[str] = set()
+    matches: list[tuple[int, int, str]] = []
     for canonical, forms in SKILL_SYNONYMS.items():
         for form in forms:
-            if re.search(rf"(?<![a-z0-9]){re.escape(form)}(?![a-z0-9])", lowered):
-                found.add(canonical)
-                break
-    return sorted(found)
+            for match in re.finditer(
+                rf"(?<![a-z0-9]){re.escape(form)}(?![a-z0-9])", lowered
+            ):
+                matches.append((match.start(), match.end(), canonical))
+
+    selected: list[tuple[int, int, str]] = []
+    for start, end, canonical in sorted(
+        matches,
+        key=lambda item: (-(item[1] - item[0]), item[0], item[2]),
+    ):
+        if any(start < selected_end and selected_start < end
+               for selected_start, selected_end, _ in selected):
+            continue
+        selected.append((start, end, canonical))
+
+    return sorted({canonical for _, _, canonical in selected})
 
 
 def find_soft_skills_in_text(text: str) -> list[str]:

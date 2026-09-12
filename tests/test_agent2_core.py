@@ -8,6 +8,7 @@ from backend.agents.agent2_job_matching.requirements import extract_job_requirem
 from backend.agents.agent2_job_matching.scoring import score_candidate
 from backend.api.agent2 import MatchRequest
 from backend.config import get_settings
+from backend.ir.skill_taxonomy import find_skills_in_text, normalize_skill
 from backend.schemas import CandidateProfile, EducationEntry, JobRequirement
 
 
@@ -30,6 +31,23 @@ def complete_job_description() -> str:
         + "Preferred: Power BI. At least 2 years of experience. "
         "Bachelor degree required."
     )
+
+
+def test_sql_taxonomy_aliases_have_consistent_canonical_mappings() -> None:
+    assert normalize_skill("SQL") == "SQL"
+    assert normalize_skill("Structured Query Language") == "SQL"
+    assert normalize_skill("SQL Server") == "SQL Server"
+    assert normalize_skill("MS SQL Server") == "SQL Server"
+    assert normalize_skill("T-SQL") == "SQL Server"
+    assert normalize_skill("TSQL") == "SQL Server"
+
+
+def test_sql_server_aliases_are_not_discovered_as_both_sql_and_sql_server() -> None:
+    assert find_skills_in_text("SQL") == ["SQL"]
+    assert find_skills_in_text("SQL Server") == ["SQL Server"]
+    assert find_skills_in_text("MS SQL Server") == ["SQL Server"]
+    assert find_skills_in_text("T-SQL") == ["SQL Server"]
+    assert find_skills_in_text("TSQL") == ["SQL Server"]
 
 
 def test_successful_matching_with_ok_status() -> None:
