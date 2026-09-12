@@ -106,6 +106,28 @@ class JobRequirement(BaseModel):
     required_certifications: list[str] = Field(default_factory=list)
 
 
+class JobCreate(BaseModel):
+    """JSON payload for creating one persisted vacancy."""
+
+    job_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+    )
+    job_title: str = Field(min_length=1, max_length=200)
+    job_description: str = Field(min_length=1, max_length=100_000)
+
+
+class JobOut(BaseModel):
+    """Persisted vacancy returned by the Agent 2 job API."""
+
+    job_id: str
+    job_title: str
+    job_description: str
+    created_at: datetime
+
+
 class ScoreBreakdown(BaseModel):
     """Weighted Agent 2 component contributions to the 0-100 final score."""
 
@@ -140,6 +162,17 @@ class RequirementMatchEvidence(BaseModel):
     evidence: str = ""
 
 
+class UncertainMatch(BaseModel):
+    """A requirement where candidate evidence is present but inconclusive."""
+
+    requirement_type: Literal[
+        "skill", "experience", "education", "certification", "responsibility"
+    ]
+    requirement: str
+    reason: str
+    candidate_evidence: str = ""
+
+
 class SkillScoreEvidence(BaseModel):
     """Explainable evidence for a mandatory or preferred skill component."""
 
@@ -159,11 +192,19 @@ class ExperienceScoreEvidence(BaseModel):
 
 
 class EducationScoreEvidence(BaseModel):
-    """Explainable evidence for the education component."""
+    """Explainable evidence for the combined education/certification component."""
 
-    score: float = Field(default=0.0, ge=0, le=100)
+    score: float = Field(default=0.0, ge=0, le=15)
     candidate_education: list[str] = Field(default_factory=list)
     required_education: str = ""
+    education_match_status: Literal["matched", "partial", "missing", "not_required"] = "not_required"
+    education_contribution: float = Field(default=0.0, ge=0, le=15)
+    required_certifications: list[str] = Field(default_factory=list)
+    matched_certifications: list[str] = Field(default_factory=list)
+    missing_certifications: list[str] = Field(default_factory=list)
+    certification_match_status: Literal["matched", "partial", "missing", "not_required"] = "not_required"
+    certification_contribution: float = Field(default=0.0, ge=0, le=15)
+    total_combined_contribution: float = Field(default=0.0, ge=0, le=15)
     evidence: str = ""
 
 
@@ -197,6 +238,7 @@ class MatchResult(BaseModel):
     certification_evidence: RequirementMatchEvidence = Field(
         default_factory=RequirementMatchEvidence
     )
+    uncertain_matches: list[UncertainMatch] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

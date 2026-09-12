@@ -48,6 +48,11 @@ _CERTIFICATION_HEADINGS = re.compile(
 _CERTIFICATION_LINE = re.compile(
     r"(?i)\b(?:certification|certificate|certified|license|licence)\b"
 )
+_REQUIREMENT_SECTION_HEADINGS = re.compile(
+    r"(?i)^\s*(?:(?:required|mandatory|preferred|minimum|key)\s+)?"
+    r"(?:skills?|education|qualifications?|experience|responsibilit(?:y|ies)|"
+    r"duties|tasks|certifications?|licenses?|licences?)\s*:"
+)
 
 
 def extract_job_requirements(
@@ -184,7 +189,7 @@ def _extract_responsibilities(description: str) -> list[str]:
 
 
 def _extract_certifications(description: str) -> list[str]:
-    """Extract explicit certification/license lines from the vacancy."""
+    """Extract certification names from explicit certification sections."""
     lines = description.splitlines()
     output: list[str] = []
     in_section = False
@@ -197,11 +202,15 @@ def _extract_certifications(description: str) -> list[str]:
         if _CERTIFICATION_HEADINGS.match(stripped):
             in_section = True
             remainder = re.sub(_CERTIFICATION_HEADINGS, "", stripped).strip(" :-")
-            if remainder and _CERTIFICATION_LINE.search(remainder):
+            if remainder:
                 _append_items(output, remainder)
             continue
-        if in_section and _CERTIFICATION_LINE.search(stripped):
-            _append_items(output, stripped)
+        if in_section:
+            if _REQUIREMENT_SECTION_HEADINGS.match(stripped):
+                in_section = False
+                continue
+            if stripped:
+                _append_items(output, stripped)
     return output[:20]
 
 

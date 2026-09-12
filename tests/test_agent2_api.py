@@ -1,6 +1,8 @@
 """API-level tests for the Agent 2 FastAPI endpoints."""
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from backend.agents.agent2_job_matching import agent as agent2_agent
@@ -82,6 +84,7 @@ def test_agent2_match_returns_complete_valid_response(monkeypatch) -> None:
     assert result.matched_mandatory_skills
     assert result.matched_preferred_skills
     assert result.skill_gaps
+    assert isinstance(result.uncertain_matches, list)
     assert isinstance(result.warnings, list)
 
 
@@ -140,3 +143,77 @@ def test_agent2_match_rejects_invalid_request_payload() -> None:
 
     assert response.status_code == 422
     assert "detail" in response.json()
+
+
+def test_job_creation_persists_and_returns_job() -> None:
+    job_id = f"JOB-CREATE-{uuid4().hex[:8].upper()}"
+    response = client.post(
+        "/api/agent2/jobs",
+        json={
+            "job_id": job_id,
+            "job_title": "Data Analyst",
+            "job_description": "Required skills: Python. Minimum 1 year experience.",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["job_id"] == job_id
+    assert payload["job_title"] == "Data Analyst"
+    assert payload["created_at"]
+
+
+def test_job_creation_rejects_invalid_job_id() -> None:
+    response = client.post(
+        "/api/agent2/jobs",
+        json={
+            "job_id": "invalid job id",
+            "job_title": "Data Analyst",
+            "job_description": "Required skills: Python.",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_matching_rejects_unknown_persisted_job_id() -> None:
+    request = {
+        **VALID_REQUEST,
+        "job_id": "JOB-DOES-NOT-EXIST",
+        "job_title": "",
+        "job_description": "",
+    }
+
+    response = client.post("/api/agent2/match", json=request)
+
+    assert response.status_code == 404
+
+
+def test_matching_uses_persisted_job() -> None:
+    job_id = f"JOB-STORED-{uuid4().hex[:8].upper()}"
+    create_response = client.post(
+        "/api/agent2/jobs",
+        json={
+            "job_id": job_id,
+            "job_title": "Stored Data Analyst",
+            "job_description": "Required skills: Python, SQL. Bachelor degree required.",
+        },
+    )
+    assert create_response.status_code == 201
+
+    response = client.post(
+        "/api/agent2/match",
+        json={**VALID_REQUEST, "job_id": job_id, "job_title": "", "job_description": ""},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job_id"] == job_id
+    assert payload["score_evidence"]["mandatory_skills"]["matched"] == ["Python", "SQL"]
+
+
+def test_existing_direct_matching_remains_compatible() -> None:
+    response = client.post("/api/agent2/match", json=VALID_REQUEST)
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "JOB-API-001"

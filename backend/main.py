@@ -11,9 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.agent1 import router as agent1_router
 from backend.api.agent2 import router as agent2_router
 from backend.config import get_settings
+from backend.database import create_db_and_tables
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
+create_db_and_tables()
 
 app.add_middleware(
     CORSMiddleware,

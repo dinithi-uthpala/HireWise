@@ -239,10 +239,14 @@ def test_score_evidence_explains_each_component_without_changing_score() -> None
     assert result.score_evidence.education.candidate_education == ["Bachelor"]
     assert result.score_evidence.education.required_education == "bachelor"
     assert result.score_evidence.education.score == result.score_breakdown.education
-    assert result.score_evidence.education.evidence == "Candidate meets the required education level."
+    assert result.score_evidence.education.education_match_status == "matched"
+    assert result.score_evidence.education.education_contribution == 15.0
+    assert result.score_evidence.education.certification_match_status == "not_required"
+    assert result.score_evidence.education.total_combined_contribution == 15.0
+    assert "total contribution 15.00 of 15.00" in result.score_evidence.education.evidence
 
 
-def test_responsibilities_and_certifications_are_extracted_and_matched_without_scoring() -> None:
+def test_responsibilities_and_certifications_are_extracted_and_certifications_are_scored() -> None:
     candidate = CandidateProfile(
         candidate_id="CAND-REQUIREMENTS-001",
         technical_skills=["Python"],
@@ -273,10 +277,57 @@ def test_responsibilities_and_certifications_are_extracted_and_matched_without_s
     assert result.certification_evidence.matched == [
         "AWS Certified Cloud Practitioner"
     ]
+    assert result.score_evidence.education.certification_contribution == 15.0
     assert result.match_score is not None
 
 
-def test_responsibility_and_certification_evidence_does_not_change_score() -> None:
+def test_plain_certification_names_under_explicit_heading_are_extracted() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications:\nAWS Solutions Architect\nMicrosoft Azure Administrator",
+    )
+
+    assert requirements.required_certifications == [
+        "AWS Solutions Architect",
+        "Microsoft Azure Administrator",
+    ]
+
+
+def test_inline_certification_requirement_remains_supported() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications: AWS Certified Cloud Practitioner",
+    )
+
+    assert requirements.required_certifications == [
+        "AWS Certified Cloud Practitioner"
+    ]
+
+
+def test_multiple_inline_certification_names_are_extracted() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications: AWS Solutions Architect; Microsoft Azure Administrator",
+    )
+
+    assert requirements.required_certifications == [
+        "AWS Solutions Architect",
+        "Microsoft Azure Administrator",
+    ]
+
+
+def test_certification_extraction_stops_at_next_requirement_section() -> None:
+    requirements, _ = extract_job_requirements(
+        "Cloud Administrator",
+        "Required certifications:\nAWS Solutions Architect\n"
+        "Responsibilities:\nManage cloud infrastructure\n"
+        "Preferred skills: Python",
+    )
+
+    assert requirements.required_certifications == ["AWS Solutions Architect"]
+
+
+def test_responsibility_evidence_does_not_change_score() -> None:
     candidate = candidate_profile()
     base_job = JobRequirement(
         mandatory_skills=["Python"],
@@ -285,9 +336,193 @@ def test_responsibility_and_certification_evidence_does_not_change_score() -> No
     )
     enriched_job = base_job.model_copy(update={
         "responsibilities": ["Build dashboards"],
-        "required_certifications": ["AWS Certified Cloud Practitioner"],
     })
 
     assert score_candidate(candidate, base_job).match_score == score_candidate(
         candidate, enriched_job
+    ).match_score
+
+
+def test_education_only_uses_full_fifteen_percent_component() -> None:
+    result = score_candidate(
+        candidate_profile(),
+        JobRequirement(required_education_level="bachelor"),
+    )
+
+    evidence = result.score_evidence.education
+    assert result.score_breakdown.education == 15.0
+    assert evidence.education_match_status == "matched"
+    assert evidence.education_contribution == 15.0
+    assert evidence.certification_contribution == 0.0
+    assert evidence.total_combined_contribution == 15.0
+
+
+def test_certification_only_uses_full_fifteen_percent_component() -> None:
+    candidate = candidate_profile().model_copy(
+        update={"certifications": ["AWS Certified Cloud Practitioner"]}
+    )
+    result = score_candidate(
+        candidate,
+        JobRequirement(required_certifications=["AWS Certified Cloud Practitioner"]),
+    )
+
+    evidence = result.score_evidence.education
+    assert result.score_breakdown.education == 15.0
+    assert evidence.education_match_status == "not_required"
+    assert evidence.certification_match_status == "matched"
+    assert evidence.certification_contribution == 15.0
+    assert evidence.total_combined_contribution == 15.0
+
+
+def test_education_and_certification_split_the_existing_component_equally() -> None:
+    candidate = candidate_profile().model_copy(
+        update={"certifications": ["AWS Certified Cloud Practitioner"]}
+    )
+    result = score_candidate(
+        candidate,
+        JobRequirement(
+            required_education_level="bachelor",
+            required_certifications=["AWS Certified Cloud Practitioner"],
+        ),
+    )
+
+    evidence = result.score_evidence.education
+    assert result.score_breakdown.education == 15.0
+    assert evidence.education_contribution == 7.5
+    assert evidence.certification_contribution == 7.5
+    assert evidence.total_combined_contribution == 15.0
+
+
+def test_missing_certification_is_evidenced_and_receives_no_certification_credit() -> None:
+    result = score_candidate(
+        candidate_profile(),
+        JobRequirement(required_certifications=["AWS Certified Cloud Practitioner"]),
+    )
+
+    evidence = result.score_evidence.education
+    assert evidence.certification_match_status == "missing"
+    assert evidence.matched_certifications == []
+    assert evidence.missing_certifications == ["AWS Certified Cloud Practitioner"]
+    assert evidence.certification_contribution == 0.0
+    assert evidence.total_combined_contribution == 0.0
+
+
+def test_all_official_components_total_one_hundred_and_education_component_is_capped() -> None:
+    candidate = candidate_profile().model_copy(
+        update={"certifications": ["AWS Certified Cloud Practitioner"]}
+    )
+    result = score_candidate(
+        candidate,
+        JobRequirement(
+            mandatory_skills=["Python"],
+            preferred_skills=["Excel"],
+            minimum_experience_years=1.0,
+            required_education_level="bachelor",
+            required_certifications=["AWS Certified Cloud Practitioner"],
+        ),
+    )
+    settings = get_settings()
+
+    assert result.score_breakdown.education <= 15.0
+    assert result.score_breakdown.mandatory_skills == 45.0
+    assert result.score_breakdown.experience == 25.0
+    assert result.score_breakdown.education == 15.0
+    assert result.score_breakdown.preferred_skills == 15.0
+    assert result.match_score == 100.0
+    assert (
+        settings.weight_mandatory_skills
+        + settings.weight_experience
+        + settings.weight_education
+        + settings.weight_preferred_skills
+        == 1.0
+    )
+
+
+def test_clear_skill_match_is_not_uncertain() -> None:
+    result = score_candidate(
+        candidate_profile(),
+        JobRequirement(mandatory_skills=["Python"]),
+    )
+
+    assert result.uncertain_matches == []
+
+
+def test_clear_missing_skill_is_not_uncertain() -> None:
+    result = score_candidate(
+        candidate_profile(),
+        JobRequirement(mandatory_skills=["SQL"]),
+    )
+
+    assert result.skill_gaps[0].skill == "SQL"
+    assert result.uncertain_matches == []
+
+
+def test_ambiguous_skill_evidence_is_flagged_without_assuming_a_match() -> None:
+    candidate = candidate_profile().model_copy(
+        update={"summary": "Worked with data tools on reporting projects."}
+    )
+    result = score_candidate(candidate, JobRequirement(mandatory_skills=["Power BI"]))
+
+    assert result.matched_mandatory_skills == []
+    assert any(
+        item.requirement_type == "skill" and item.requirement == "Power BI"
+        for item in result.uncertain_matches
+    )
+
+
+def test_ambiguous_experience_evidence_is_flagged() -> None:
+    candidate = candidate_profile().model_copy(update={"total_experience_years": 1.0})
+    result = score_candidate(
+        candidate,
+        JobRequirement(minimum_experience_years=2.0),
+    )
+
+    assert any(item.requirement_type == "experience" for item in result.uncertain_matches)
+
+
+def test_unmapped_education_evidence_is_flagged() -> None:
+    candidate = candidate_profile().model_copy(update={
+        "education": [EducationEntry(degree="Relevant studies")],
+    })
+    result = score_candidate(
+        candidate,
+        JobRequirement(required_education_level="bachelor"),
+    )
+
+    assert any(item.requirement_type == "education" for item in result.uncertain_matches)
+
+
+def test_ambiguous_certification_evidence_is_flagged() -> None:
+    candidate = candidate_profile().model_copy(update={"certifications": ["AWS"]})
+    result = score_candidate(
+        candidate,
+        JobRequirement(required_certifications=["AWS Certified Cloud Practitioner"]),
+    )
+
+    assert result.certification_evidence.matched == []
+    assert any(item.requirement_type == "certification" for item in result.uncertain_matches)
+
+
+def test_partial_responsibility_evidence_is_flagged() -> None:
+    candidate = candidate_profile().model_copy(
+        update={"projects": ["Created dashboards for monthly reporting."]}
+    )
+    result = score_candidate(
+        candidate,
+        JobRequirement(responsibilities=["Build dashboards"]),
+    )
+
+    assert result.responsibility_evidence.matched == []
+    assert any(item.requirement_type == "responsibility" for item in result.uncertain_matches)
+
+
+def test_uncertainty_does_not_change_the_deterministic_score() -> None:
+    clear_candidate = candidate_profile()
+    ambiguous_candidate = clear_candidate.model_copy(
+        update={"summary": "Worked with data tools on reporting projects."}
+    )
+    job = JobRequirement(mandatory_skills=["Power BI"])
+
+    assert score_candidate(clear_candidate, job).match_score == score_candidate(
+        ambiguous_candidate, job
     ).match_score

@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import uuid4
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlmodel import Session
 
 from backend.agents.agent2_job_matching.agent import match_candidate_to_job
-from backend.schemas import CandidateProfile, MatchResult
+from backend.database import get_session
+from backend.models import JobVacancy
+from backend.schemas import CandidateProfile, JobCreate, JobOut, MatchResult
 
 
 class MatchRequest(BaseModel):
@@ -48,12 +52,41 @@ class MatchRequest(BaseModel):
     )
     job_id: str = Field(
         default="",
-        description="Optional job identifier used to correlate the match result.",
+        description=(
+            "Persisted job identifier. When supplied, the stored job title and "
+            "description are used for matching."
+        ),
         examples=["JOB-001"],
     )
 
 
 router = APIRouter(prefix="/agent2", tags=["Agent 2 - Job Matching"])
+
+
+@router.post("/jobs", response_model=JobOut, status_code=status.HTTP_201_CREATED)
+def create_job(request: JobCreate, session: Session = Depends(get_session)) -> JobOut:
+    """Create a persisted vacancy for Agent 2 matching."""
+    job_id = request.job_id or f"JOB-{uuid4().hex[:12].upper()}"
+    if session.get(JobVacancy, job_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Job ID '{job_id}' already exists.",
+        )
+
+    job = JobVacancy(
+        job_id=job_id,
+        job_title=request.job_title,
+        job_description=request.job_description,
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return JobOut(
+        job_id=job.job_id,
+        job_title=job.job_title,
+        job_description=job.job_description,
+        created_at=job.created_at,
+    )
 
 
 @router.post("/match", response_model=MatchResult)
@@ -103,12 +136,25 @@ def match_candidate(
             }
         },
     ),
+    session: Session = Depends(get_session),
 ) -> MatchResult:
     """Match an anonymous CandidateProfile against one job description."""
+    job_title = request.job_title
+    job_description = request.job_description
+    if request.job_id and not (job_title.strip() or job_description.strip()):
+        stored_job = session.get(JobVacancy, request.job_id)
+        if stored_job is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job ID '{request.job_id}' was not found.",
+            )
+        job_title = stored_job.job_title
+        job_description = stored_job.job_description
+
     return match_candidate_to_job(
         candidate=request.candidate,
-        job_title=request.job_title,
-        job_description=request.job_description,
+        job_title=job_title,
+        job_description=job_description,
         parse_status=request.parse_status,
         extraction_confidence=request.extraction_confidence,
         job_id=request.job_id,
