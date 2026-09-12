@@ -1,18 +1,25 @@
 # Knowledge Base Documents
 
-Seed documents that Agent 2 retrieves from the ChromaDB vector store
-at match time. Store them as Markdown files here and load them with
-`scripts/seed_kb.py`.
+Approved, fictional project-knowledge documents that Agent 2 can retrieve
+from the persistent ChromaDB vector store. Seed them from the repository root
+with:
 
-Planned documents (10-20 records):
+  python scripts/seed_knowledge_base.py
+
+Current document groups include:
   - `data_analyst_competency_framework.md`
   - `software_engineer_competency_framework.md`
   - `hr_assistant_competency_framework.md`
   - `skill_taxonomy.md` (canonical skills + synonyms)
-  - `scoring_rubric.md` (fixed weighted formula, thresholds)
-  - `mandatory_vs_preferred.md` (definitions + guidelines)
-  - `recruitment_evaluation_policy.md`
+  - `recruitment_scoring_guidelines.md` (fixed weighted formula)
+  - `mandatory_vs_preferred_criteria.md` (definitions + guidelines)
   - `retrieval_evidence_rules.md`
+  - `job_responsibility_evaluation_guidance.md`
+  - `experience_evaluation_guidelines.md`
+  - `certification_evaluation_guidance.md`
+  - `job_requirement_evidence_rules.md`
 
-Each file should carry front-matter metadata (id, category) used for
-filtered retrieval.
+Each file carries simple front-matter metadata (`id`, `category`) used for
+source-aware retrieval results. The current corpus contains 11 documents.
+Retrieval supplies approved guidance and source evidence; the existing
+deterministic Agent 2 scorer remains responsible for numeric match scores.

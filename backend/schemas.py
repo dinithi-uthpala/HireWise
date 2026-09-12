@@ -4,13 +4,13 @@ These schemas define the agent-communication protocol over REST + JSON and
 are validated on every hop, which keeps the agent outputs clean, predictable
 and safe.
 
-Currently implemented: Agent 1 (Candidate Intelligence) contract.
-Agent 2 / Agent 3 will add their models here as they are built.
+Contains the Agent 1 and Agent 2 communication contracts. Agent 3 models can
+be added here as that agent is implemented.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -87,6 +87,117 @@ class ExtractionResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     source_hash: str = ""            # sha256 of the original upload
     stored_cv_path: str = ""         # path of the encrypted original CV
+
+
+# ===========================================================================
+# Agent 2 - Job Matching & Retrieval Agent
+# ===========================================================================
+class JobRequirement(BaseModel):
+    """Sanitized, normalized requirements for one job vacancy."""
+
+    job_id: str = ""
+    title: str = ""
+    description: str = ""
+    mandatory_skills: list[str] = Field(default_factory=list)
+    preferred_skills: list[str] = Field(default_factory=list)
+    minimum_experience_years: float = Field(default=0.0, ge=0)
+    required_education_level: str = ""
+    responsibilities: list[str] = Field(default_factory=list)
+    required_certifications: list[str] = Field(default_factory=list)
+
+
+class ScoreBreakdown(BaseModel):
+    """Weighted Agent 2 component contributions to the 0-100 final score."""
+
+    mandatory_skills: float = Field(default=0.0, ge=0, le=100)
+    experience: float = Field(default=0.0, ge=0, le=100)
+    education: float = Field(default=0.0, ge=0, le=100)
+    preferred_skills: float = Field(default=0.0, ge=0, le=100)
+
+
+class SkillGap(BaseModel):
+    """A required or preferred skill missing from the candidate profile."""
+
+    skill: str
+    category: Literal["mandatory", "preferred"]
+    reason: str = ""
+
+
+class RetrievalEvidence(BaseModel):
+    """Compact source reference returned by Agent 2 retrieval."""
+
+    source: str
+    category: str = ""
+    relevance: float | None = Field(default=None, ge=0, le=1)
+
+
+class RequirementMatchEvidence(BaseModel):
+    """Deterministic, non-scoring evidence for additional requirements."""
+
+    required: list[str] = Field(default_factory=list)
+    matched: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    evidence: str = ""
+
+
+class SkillScoreEvidence(BaseModel):
+    """Explainable evidence for a mandatory or preferred skill component."""
+
+    score: float = Field(default=0.0, ge=0, le=100)
+    matched: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    evidence: str = ""
+
+
+class ExperienceScoreEvidence(BaseModel):
+    """Explainable evidence for the experience component."""
+
+    score: float = Field(default=0.0, ge=0, le=100)
+    candidate_years: float = Field(default=0.0, ge=0)
+    required_years: float = Field(default=0.0, ge=0)
+    evidence: str = ""
+
+
+class EducationScoreEvidence(BaseModel):
+    """Explainable evidence for the education component."""
+
+    score: float = Field(default=0.0, ge=0, le=100)
+    candidate_education: list[str] = Field(default_factory=list)
+    required_education: str = ""
+    evidence: str = ""
+
+
+class ScoreEvidence(BaseModel):
+    """Component-level explanations for the deterministic score."""
+
+    mandatory_skills: SkillScoreEvidence = Field(default_factory=SkillScoreEvidence)
+    preferred_skills: SkillScoreEvidence = Field(default_factory=SkillScoreEvidence)
+    experience: ExperienceScoreEvidence = Field(default_factory=ExperienceScoreEvidence)
+    education: EducationScoreEvidence = Field(default_factory=EducationScoreEvidence)
+
+
+class MatchResult(BaseModel):
+    """Agent 2 result for one candidate and one job."""
+
+    candidate_id: str
+    job_id: str = ""
+    parse_status: Literal["ok", "low_confidence", "failed"] = "ok"
+    match_status: Literal["scored", "warning", "unavailable"] = "scored"
+    extraction_confidence: float = Field(default=0.0, ge=0, le=1)
+    match_score: float | None = Field(default=None, ge=0, le=100)
+    score_breakdown: ScoreBreakdown = Field(default_factory=ScoreBreakdown)
+    matched_mandatory_skills: list[str] = Field(default_factory=list)
+    matched_preferred_skills: list[str] = Field(default_factory=list)
+    skill_gaps: list[SkillGap] = Field(default_factory=list)
+    retrieval_evidence: list[RetrievalEvidence] = Field(default_factory=list)
+    score_evidence: ScoreEvidence = Field(default_factory=ScoreEvidence)
+    responsibility_evidence: RequirementMatchEvidence = Field(
+        default_factory=RequirementMatchEvidence
+    )
+    certification_evidence: RequirementMatchEvidence = Field(
+        default_factory=RequirementMatchEvidence
+    )
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ===========================================================================

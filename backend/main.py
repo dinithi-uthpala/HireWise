@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.agent1 import router as agent1_router
+from backend.api.agent2 import router as agent2_router
 from backend.config import get_settings
 
 settings = get_settings()
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(agent1_router, prefix="/api")
+app.include_router(agent2_router, prefix="/api")
 
 
 @app.get("/health", tags=["system"])

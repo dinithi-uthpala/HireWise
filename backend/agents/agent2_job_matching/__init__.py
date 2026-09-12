@@ -1,16 +1,10 @@
 """Agent 2 - Job Matching & Retrieval Agent.
 
-Determines how well an anonymized profile matches a vacancy using approved,
-predefined, job-related criteria. Responsibilities:
-    - extract job requirements (mandatory / preferred skills, experience)
-    - retrieval from the ChromaDB knowledge base (competency frameworks,
-      skill taxonomy, scoring rubric)
-    - skill normalization + taxonomy/semantic matching
-    - transparent, fixed scoring (weighted rubric from config)
-    - evidence for every score component + skill-gap analysis
+The package extracts job requirements, retrieves approved role guidance from
+the ChromaDB knowledge base, and compares an anonymous CandidateProfile with
+the vacancy using deterministic scoring. Retrieval supplies context and
+source evidence; it never calculates or changes the numeric match score.
 
 Input : anonymous CandidateProfile + job description
-Output: MatchResultData (score, evidence, gaps, retrieved documents)
+Output: MatchResult (score, component evidence, gaps, and retrieval sources)
 """
-
-# TODO(Team member 2): implement vector retrieval, matching and scoring.

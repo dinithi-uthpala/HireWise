@@ -22,8 +22,8 @@ privacy-aware **first-stage candidate shortlisting** from CVs. It is a
                        │  anonymous profile
                        ▼
    ┌────────────────────────────────────────┐
-   │ Agent 2  Job Matching & Retrieval Agent │  ChromaDB retrieval, skill
-   │          (IR + normalization +   )      │  normalization, transparent score
+  │ Agent 2  Job Matching & Retrieval Agent │  ChromaDB retrieval, skill
+  │          (IR + normalization)           │  evidence, transparent score
    └───────────────────┬────────────────────┘
                        │  score + evidence
                        ▼
@@ -60,7 +60,7 @@ backend/                     FastAPI backend package
 frontend/                  Streamlit dashboard (pages/ per screen)
 knowledge_base/docs/       seed documents loaded into ChromaDB
 samples/cvs/               demo CVs (PDF/DOCX)
-scripts/                   seed_kb.py, generate_sample_cvs.py, run_all.py
+scripts/                   seed_knowledge_base.py, generate_sample_cvs.py, run_all.py
 tests/                     pytest suite
 data/  storage/  chroma_db/   runtime artifacts (git-ignored)
 ```
@@ -81,8 +81,8 @@ py -m pip install -r requirements-frontend.txt
 # 3. Configure environment
 copy .env.example .env            # Windows  (cp .env.example .env on Linux/mac)
 
-# 4. Seed the vector knowledge base (after implementing scripts/seed_kb.py)
-py scripts/seed_kb.py
+# 4. Seed the vector knowledge base
+py scripts/seed_knowledge_base.py
 
 # 5. Run the backend (FastAPI)
 uvicorn backend.main:app --reload --port 8000
