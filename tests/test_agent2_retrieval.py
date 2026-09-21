@@ -78,3 +78,36 @@ def test_production_knowledge_base_documents_load_with_metadata() -> None:
     assert all(document.source.endswith(".md") for document in documents)
     assert all(document.category for document in documents)
     assert all(document.content.strip() for document in documents)
+
+
+def test_retrieval_exposes_only_approved_related_skills_from_document(monkeypatch) -> None:
+    from backend.agents.agent2_job_matching import retrieval as retrieval_module
+    from backend.ir.vector_store import RetrievedDocument
+    from backend.schemas import JobRequirement
+
+    document = RetrievedDocument(
+        document_id="data-analyst-framework",
+        content=(
+            "Data Visualization is useful. Power BI, Tableau, and Looker Studio "
+            "are common dashboard tools."
+        ),
+        source="data_analyst_competency_framework.md",
+        category="competency_framework",
+        distance=0.1,
+    )
+    monkeypatch.setattr(
+        retrieval_module,
+        "retrieve_relevant_criteria",
+        lambda query, top_k=3: [document],
+    )
+
+    job = JobRequirement(
+        job_id="JOB-RELATED-002",
+        title="Data Analyst",
+        mandatory_skills=["Data Visualization"],
+    )
+
+    evidence, warnings = retrieval_module.retrieve_job_evidence(job)
+
+    assert warnings == []
+    assert evidence[0].related_skills == ["Looker Studio", "Power BI", "Tableau"]

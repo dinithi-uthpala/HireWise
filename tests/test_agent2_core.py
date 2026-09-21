@@ -197,6 +197,28 @@ def test_optional_skill_markers_are_not_mandatory() -> None:
     assert requirements.mandatory_skills == []
 
 
+
+def test_skills_section_headings_provide_mandatory_context() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "Required Skills:\nPython\nSQL\nExcel\n\nPreferred Skills:\nPower BI\nTableau",
+    )
+
+    assert set(requirements.mandatory_skills) == {"Python", "SQL", "Excel"}
+    assert set(requirements.preferred_skills) == {"Power BI", "Tableau"}
+
+
+def test_section_context_does_not_leak_into_later_contextual_mentions() -> None:
+    requirements, _ = extract_job_requirements(
+        "Developer",
+        "Required Skills:\nPython\n\nThe team uses Power BI and Pandas.",
+    )
+
+    assert requirements.mandatory_skills == ["Python"]
+    assert requirements.preferred_skills == []
+    assert "Power BI" not in requirements.mandatory_skills
+    assert "Pandas" not in requirements.mandatory_skills
+
 def test_contextual_skill_mentions_are_not_requirements() -> None:
     requirements, _ = extract_job_requirements(
         "Developer",

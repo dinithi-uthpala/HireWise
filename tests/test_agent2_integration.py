@@ -89,3 +89,39 @@ def test_empty_retrieval_results_do_not_crash_matching(monkeypatch) -> None:
     assert result.match_score is not None
     assert result.retrieval_evidence == []
     assert any("no approved knowledge-base evidence" in warning.lower() for warning in result.warnings)
+
+
+def test_retrieval_supported_related_skill_can_satisfy_broader_requirement(monkeypatch) -> None:
+    evidence = [
+        RetrievalEvidence(
+            source="data_analyst_competency_framework.md",
+            category="competency_framework",
+            relevance=0.91,
+            related_skills=["Power BI", "Tableau", "Looker Studio"],
+        )
+    ]
+    monkeypatch.setattr(
+        agent_module,
+        "retrieve_job_evidence",
+        lambda job: (evidence, []),
+    )
+
+    result = match_candidate_to_job(
+        CandidateProfile(
+            candidate_id="CAND-RELATED-001",
+            technical_skills=["Power BI"],
+            total_experience_years=1.0,
+        ),
+        "Data Analyst",
+        "Required skills: Data Visualization.",
+        "ok",
+        1.0,
+        job_id="JOB-RELATED-001",
+    )
+
+    assert result.matched_mandatory_skills == ["Data Visualization"]
+    assert result.skill_gaps == []
+    assert result.score_evidence.mandatory_skills.related_matches == {
+        "Data Visualization": ["Power BI"]
+    }
+    assert result.score_breakdown.mandatory_skills == 45.0

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 from backend.config import get_settings
-from backend.ir.skill_taxonomy import normalize_skill
+from backend.ir.skill_taxonomy import RELATED_SKILLS, normalize_skill
 from backend.schemas import (
     CandidateProfile,
     JobRequirement,
@@ -17,6 +17,7 @@ from backend.schemas import (
     ExperienceScoreEvidence,
     RequirementMatchEvidence,
     UncertainMatch,
+    RetrievalEvidence,
 )
 
 
@@ -36,7 +37,11 @@ _EDUCATION_LEVELS = {
 }
 
 
-def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchResult:
+def score_candidate(
+    candidate: CandidateProfile,
+    job: JobRequirement,
+    retrieval_evidence: list[RetrievalEvidence] | None = None,
+) -> MatchResult:
     """Score one anonymous candidate profile against one job requirement.
 
     The result uses four component scores from 0 to 100. Their weighted sum
@@ -64,10 +69,21 @@ def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchRe
         )
 
     candidate_skills = _normalized_candidate_skills(candidate)
+    related_matches = _build_related_matches(
+        mandatory_skills + preferred_skills, candidate_skills, retrieval_evidence or []
+    )
 
-    matched_mandatory = [skill for skill in mandatory_skills if skill in candidate_skills]
-    matched_preferred = [skill for skill in preferred_skills if skill in candidate_skills]
-    skill_gaps = _build_skill_gaps(mandatory_skills, preferred_skills, candidate_skills)
+    matched_mandatory = [
+        skill for skill in mandatory_skills
+        if skill in candidate_skills or skill in related_matches
+    ]
+    matched_preferred = [
+        skill for skill in preferred_skills
+        if skill in candidate_skills or skill in related_matches
+    ]
+    skill_gaps = _build_skill_gaps(
+        mandatory_skills, preferred_skills, candidate_skills, related_matches
+    )
 
     settings = get_settings()
     mandatory_percentage = _percentage(len(matched_mandatory), len(mandatory_skills))
@@ -121,10 +137,14 @@ def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchRe
         )
 
     missing_mandatory = [
-        skill for skill in mandatory_skills if skill not in candidate_skills
+        skill
+        for skill in mandatory_skills
+        if skill not in candidate_skills and skill not in related_matches
     ]
     missing_preferred = [
-        skill for skill in preferred_skills if skill not in candidate_skills
+        skill
+        for skill in preferred_skills
+        if skill not in candidate_skills and skill not in related_matches
     ]
 
     breakdown = ScoreBreakdown(
@@ -139,6 +159,11 @@ def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchRe
             score=breakdown.mandatory_skills,
             matched=matched_mandatory,
             missing=missing_mandatory,
+            related_matches={
+                skill: related_matches[skill]
+                for skill in matched_mandatory
+                if skill in related_matches
+            },
             evidence=_skill_evidence(
                 len(matched_mandatory), len(mandatory_skills), "mandatory"
             ),
@@ -147,6 +172,11 @@ def score_candidate(candidate: CandidateProfile, job: JobRequirement) -> MatchRe
             score=breakdown.preferred_skills,
             matched=matched_preferred,
             missing=missing_preferred,
+            related_matches={
+                skill: related_matches[skill]
+                for skill in matched_preferred
+                if skill in related_matches
+            },
             evidence=_skill_evidence(
                 len(matched_preferred), len(preferred_skills), "preferred"
             ),
@@ -566,22 +596,47 @@ def _education_rank(value: str) -> int:
     return 0
 
 
+def _build_related_matches(
+    required_skills: list[str],
+    candidate_skills: set[str],
+    retrieval_evidence: list[RetrievalEvidence],
+) -> dict[str, list[str]]:
+    """Use only retrieval-supported conceptual relationships for matching."""
+    retrieved_skills = {
+        skill
+        for evidence in retrieval_evidence
+        for skill in evidence.related_skills
+    }
+    matches: dict[str, list[str]] = {}
+    for required_skill in required_skills:
+        related_candidates = sorted(
+            candidate_skills
+            & RELATED_SKILLS.get(required_skill, set())
+            & retrieved_skills
+        )
+        if related_candidates:
+            matches[required_skill] = related_candidates
+    return matches
+
+
 def _build_skill_gaps(
     mandatory_skills: list[str],
     preferred_skills: list[str],
     candidate_skills: set[str],
+    related_matches: dict[str, list[str]] | None = None,
 ) -> list[SkillGap]:
     """Create explicit gaps for each required skill absent from the profile."""
     gaps: list[SkillGap] = []
+    related_matches = related_matches or {}
     for skill in mandatory_skills:
-        if skill not in candidate_skills:
+        if skill not in candidate_skills and skill not in related_matches:
             gaps.append(SkillGap(
                 skill=skill,
                 category="mandatory",
                 reason="Mandatory job skill was not found in the candidate profile.",
             ))
     for skill in preferred_skills:
-        if skill not in candidate_skills:
+        if skill not in candidate_skills and skill not in related_matches:
             gaps.append(SkillGap(
                 skill=skill,
                 category="preferred",

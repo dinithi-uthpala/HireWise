@@ -54,7 +54,7 @@ def match_candidate_to_job(
         retrieval_evidence, retrieval_warnings = [], [
             "Knowledge-base retrieval was unavailable; deterministic scoring continued."
         ]
-    result = score_candidate(candidate, job)
+    result = score_candidate(candidate, job, retrieval_evidence=retrieval_evidence)
     result.parse_status = parse_status
     result.extraction_confidence = extraction_confidence
     if result.match_status == "scored":

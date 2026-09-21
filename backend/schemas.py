@@ -151,6 +151,7 @@ class RetrievalEvidence(BaseModel):
     source: str
     category: str = ""
     relevance: float | None = Field(default=None, ge=0, le=1)
+    related_skills: list[str] = Field(default_factory=list)
 
 
 class RequirementMatchEvidence(BaseModel):
@@ -179,6 +180,7 @@ class SkillScoreEvidence(BaseModel):
     score: float = Field(default=0.0, ge=0, le=100)
     matched: list[str] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
+    related_matches: dict[str, list[str]] = Field(default_factory=dict)
     evidence: str = ""
 
 
