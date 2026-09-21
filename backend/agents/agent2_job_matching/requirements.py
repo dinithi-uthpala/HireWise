@@ -63,6 +63,10 @@ _CERTIFICATION_PROVIDER = re.compile(
     r"(?i)\b(?:aws|amazon|microsoft|azure|google|gcp|ibm|cisco|oracle|"
     r"comptia|salesforce|kubernetes|pmi|isc2)\b"
 )
+_SKILL_SECTION_HEADING = re.compile(
+    r"(?i)^\s*(?P<context>required|mandatory|preferred|nice[- ]to[- ]have|"
+    r"good[- ]to[- ]have)\s+skills?\s*:\s*$"
+)
 
 
 def extract_job_requirements(
@@ -73,9 +77,9 @@ def extract_job_requirements(
     """Extract normalized requirements and warnings from a job description.
 
     Returns the shared ``JobRequirement`` model together with warnings about
-    information that was not found reliably. Skills without an explicit
-    preferred marker are treated as mandatory, which is conservative for
-    first-stage recruitment matching.
+    information that was not found reliably. Skills are classified only when
+    an explicit mandatory/preferred marker or a matching skills-section
+    heading provides the context; unmarked contextual mentions are ignored.
     """
     clean_title = strip_prompt_injections(title).strip()
     clean_description = strip_prompt_injections(description)
@@ -120,10 +124,11 @@ def _extract_skills(description: str) -> list[str]:
 
 
 def _classify_skills(description: str, skills: list[str]) -> tuple[list[str], list[str]]:
-    """Classify skills using markers in their containing clauses."""
+    """Classify skills using explicit markers and section-level context."""
     mandatory: list[str] = []
     preferred: list[str] = []
     clauses = _requirement_clauses(description)
+    section_context = _skill_section_context(description)
 
     for skill in skills:
         clause = _skill_clause(clauses, skill)
@@ -131,7 +136,45 @@ def _classify_skills(description: str, skills: list[str]) -> tuple[list[str], li
             mandatory.append(skill)
         elif _PREFERRED_CONTEXT.search(clause):
             preferred.append(skill)
+        elif section_context.get(skill) == "mandatory":
+            mandatory.append(skill)
+        elif section_context.get(skill) == "preferred":
+            preferred.append(skill)
     return mandatory, preferred
+
+
+def _skill_section_context(description: str) -> dict[str, str]:
+    """Map skills in explicit Required/Preferred Skills sections to context."""
+    context_by_skill: dict[str, str] = {}
+    current_context = ""
+
+    for raw_line in description.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current_context = ""
+            continue
+
+        heading = _SKILL_SECTION_HEADING.match(line)
+        if heading:
+            marker = heading.group("context").lower()
+            current_context = (
+                "preferred"
+                if marker in {"preferred", "nice to have", "good to have"}
+                else "mandatory"
+            )
+            continue
+
+        if _REQUIREMENT_SECTION_HEADINGS.match(line):
+            current_context = ""
+            continue
+
+        if current_context:
+            for skill in find_skills_in_text(line):
+                canonical = normalize_skill(skill)
+                if canonical:
+                    context_by_skill.setdefault(canonical, current_context)
+
+    return context_by_skill
 
 
 def _requirement_clauses(description: str) -> list[str]:

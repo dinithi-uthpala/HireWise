@@ -82,6 +82,14 @@ SKILL_SYNONYMS: dict[str, set[str]] = {
 # SQL Server synonyms kept separate for readability.
 SKILL_SYNONYMS["SQL Server"] = {"sql server", "ms sql server", "tsql", "t-sql"}
 
+# Retrieval-backed conceptual relationships. These are intentionally narrower
+# than synonyms: a related skill may support a broader capability, but it is
+# not treated as an exact synonym unless an approved retrieved document also
+# contains the relationship.
+RELATED_SKILLS: dict[str, set[str]] = {
+    "Data Visualization": {"Power BI", "Tableau", "Looker Studio"},
+}
+
 _CACHE: dict[str, str] = {}
 
 
