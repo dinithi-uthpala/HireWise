@@ -17,7 +17,8 @@ from tests.test_agent3_review import make_extraction, make_match
 
 
 @pytest.fixture()
-def env():
+def env(monkeypatch):
+    monkeypatch.setattr("backend.api.agent3.default_llm_from_settings", lambda: None)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
 
@@ -142,3 +143,22 @@ def test_fairness_endpoint(env):
         "cv_a_label": "Pair A", "cv_b_label": "Pair B",
         "review_a": a.model_dump(mode="json"), "review_b": b.model_dump(mode="json")}).json()
     assert body["passed"] is True
+
+
+def test_tied_candidates_get_a_note_in_the_job_list(env):
+    client, session = env
+    seed_candidate(session, "CAND-001", score=88)
+    seed_candidate(session, "CAND-002", score=88)
+    seed_candidate(session, "CAND-003", score=70, parts=(30, 20, 10, 10))
+    rows = {r["candidate_id"]: r for r in client.get("/api/jobs/JOB-1/candidates").json()}
+    assert rows["CAND-001"]["batch_notes"][0].startswith("TIED_SCORE")
+    assert rows["CAND-002"]["batch_notes"][0].startswith("TIED_SCORE")
+    assert rows["CAND-003"]["batch_notes"] == []
+
+
+def test_audit_says_the_explanation_was_rule_based(env):
+    client, session = env
+    seed_candidate(session)
+    events = client.get("/api/audit/CAND-001").json()
+    reviewed = [e for e in events if e["action"] == "reviewed"][0]
+    assert reviewed["summary"]["explanation_method"] == "rule_template"

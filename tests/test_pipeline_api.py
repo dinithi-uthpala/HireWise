@@ -51,7 +51,8 @@ CV_B = make_cv("Nimali Fernando", "nimali.fernando@example.org", "+94 71 987 654
 
 
 @pytest.fixture()
-def env():
+def env(monkeypatch):
+    monkeypatch.setattr("backend.api.pipeline.default_llm_from_settings", lambda: None)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
 

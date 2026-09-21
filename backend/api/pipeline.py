@@ -25,6 +25,10 @@ from backend.agents.agent3_responsible_decision.contracts import (
     FairnessTestResult,
 )
 from backend.agents.agent3_responsible_decision.fairness import compare_reviews
+from backend.agents.agent3_responsible_decision.llm_explain import (
+    default_llm_from_settings,
+    enhance_explanation,
+)
 from backend.agents.agent3_responsible_decision.settings_bridge import thresholds_from_settings
 from backend.agents.agent3_responsible_decision.store import save_pipeline_result, to_summary
 from backend.database import get_session
@@ -60,6 +64,7 @@ def run_agents(filename: str, data: bytes, job: JobVacancy,
         job_id=job.job_id,
     )
     review = review_candidate(extraction, match, thresholds)      # Agent 3
+    review = enhance_explanation(review, match, default_llm_from_settings())  # optional LLM wording
     return extraction, match, review
 
 

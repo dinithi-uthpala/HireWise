@@ -20,6 +20,11 @@ from backend.agents.agent3_responsible_decision.contracts import (
     ReviewRequest,
 )
 from backend.agents.agent3_responsible_decision.fairness import compare_reviews
+from backend.agents.agent3_responsible_decision.llm_explain import (
+    default_llm_from_settings,
+    enhance_explanation,
+)
+from backend.agents.agent3_responsible_decision.patterns import batch_notes
 from backend.agents.agent3_responsible_decision.settings_bridge import thresholds_from_settings
 from backend.agents.agent3_responsible_decision.store import (
     decisions_for,
@@ -46,7 +51,8 @@ def agent3_status() -> dict:
 @router.post("/agent3/review", response_model=ReviewOutput)
 def review(payload: ReviewRequest) -> ReviewOutput:
     """Stateless review: Agent 1 + Agent 2 results in, recommendation out."""
-    return review_candidate(payload.extraction, payload.match, thresholds_from_settings())
+    result = review_candidate(payload.extraction, payload.match, thresholds_from_settings())
+    return enhance_explanation(result, payload.match, default_llm_from_settings())
 
 
 @router.post("/agent3/fairness-compare", response_model=FairnessTestResult)
@@ -57,7 +63,11 @@ def fairness_compare(payload: FairnessRequest) -> FairnessTestResult:
 
 @router.get("/jobs/{job_id}/candidates", response_model=list[CandidateSummary])
 def candidates_for_job(job_id: str, session: Session = Depends(get_session)) -> list[CandidateSummary]:
-    return [to_summary(r) for r in list_candidates(session, job_id)]
+    summaries = [to_summary(r) for r in list_candidates(session, job_id)]
+    notes = batch_notes({c.candidate_id: c.match_score for c in summaries})
+    for c in summaries:
+        c.batch_notes = notes.get(c.candidate_id, [])
+    return summaries
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateDetail)

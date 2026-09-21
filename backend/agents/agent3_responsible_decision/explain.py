@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from backend.schemas import ExtractionResult, MatchResult, PrivacyCheck, RiskFlag
 
+# Appended (for transparency) whenever an LLM reworded the explanation.
+LLM_NOTE = ("Note: the wording of this explanation was refined by an AI language model. "
+            "All scores, flags and checks come from fixed rules, and a human recruiter "
+            "makes the final decision.")
+
 
 def _join(items: list[str], limit: int = 6) -> str:
     if not items:

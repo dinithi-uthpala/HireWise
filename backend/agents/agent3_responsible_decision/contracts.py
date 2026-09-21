@@ -41,6 +41,8 @@ class CandidateSummary(BaseModel):
     risk_flag_codes: list[str] = Field(default_factory=list)
     status: str = "awaiting_human_review"
     final_decision: str = ""
+    # Notes that only make sense when candidates are compared (ties, odd patterns)
+    batch_notes: list[str] = Field(default_factory=list)
 
 
 class CandidateDetail(BaseModel):

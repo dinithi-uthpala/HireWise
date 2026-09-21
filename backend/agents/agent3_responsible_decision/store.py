@@ -8,6 +8,7 @@ from backend.schemas import ExtractionResult, MatchResult, ReviewOutput
 
 from .audit import now_iso, write_audit
 from .contracts import CandidateSummary, HumanDecisionOut
+from .explain import LLM_NOTE
 from .decisions import is_override
 
 
@@ -56,6 +57,7 @@ def save_pipeline_result(session: Session, job_id: str, extraction: ExtractionRe
         "risk_flags": [f.code for f in review.risk_flags],
         "privacy_check_passed": review.privacy_check.passed,
         "human_review_required": True,
+        "explanation_method": "llm_reworded" if LLM_NOTE in review.explanation else "rule_template",
     })
     return rec
 
