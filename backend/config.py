@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     # --- Agent 3 thresholds ------------------------------------------------------
     matching_confidence_ok: float = 0.55
     strong_match_min: float = 80.0
-    potential_match_min: float = 65.0
+    potential_match_min: float = 60.0
 
     # --- vector store -------------------------------------------------------------
     kb_collection: str = "hirewise_kb"

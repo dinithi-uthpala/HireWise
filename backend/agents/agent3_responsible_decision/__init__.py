@@ -7,11 +7,12 @@ Responsibilities:
     - check required scoring evidence and match/extraction confidence
     - apply human-review rules (low confidence, missing evidence, borderlines)
     - plain-language explanation + recommendation (Strong/Potential/Manual)
-    - human override support + audit trail
-    - fairness test mode using paired CVs
+    - human override support + audit trail            (next step)
+    - fairness test mode using paired CVs              (next step)
 
-Input : profile + MatchResultData + confidence + thresholds
+Input : ExtractionResult (Agent 1) + MatchResult (Agent 2) + thresholds
 Output: ReviewOutput (recommendation + explanation + risk flags)
 """
+from .agent import review_candidate
 
-# TODO(Team member 3): implement fairness checks and recommendation logic.
+__all__ = ["review_candidate"]

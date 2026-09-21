@@ -256,3 +256,55 @@ class AgentActivityOut(BaseModel):
     status: str = "ok"               # running | ok | warning | error
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+    # ===========================================================================
+# Agent 3 - Responsible Decision Agent   (PASTE AT THE VERY BOTTOM of schemas.py)
+# Uses only names that schemas.py already imports:
+#   BaseModel, Field, Literal, datetime, timezone
+# ===========================================================================
+class RiskFlag(BaseModel):
+    """One issue the recruiter should know about."""
+
+    code: str                                   # e.g. "LOW_EXTRACTION_CONFIDENCE"
+    severity: Literal["info", "warning", "critical"] = "warning"
+    message: str                                # plain language, no personal data
+    forces_manual_review: bool = False          # True => label becomes MANUAL_REVIEW
+
+
+class ReviewThresholds(BaseModel):
+    """HR-configurable limits. Defaults follow the HireWise design document."""
+
+    extraction_confidence_ok: float = Field(default=0.75, ge=0, le=1)
+    matching_confidence_ok: float = Field(default=0.55, ge=0, le=1)
+    strong_match_min: float = Field(default=80.0, ge=0, le=100)
+    potential_match_min: float = Field(default=60.0, ge=0, le=100)
+    borderline_margin: float = Field(default=2.0, ge=0, le=20)
+
+
+class PrivacyCheck(BaseModel):
+    """Result of Agent 3's independent privacy re-check."""
+
+    passed: bool
+    checked_items: list[str] = Field(default_factory=list)
+    violations: list[str] = Field(default_factory=list)   # never contains raw values
+
+
+class ReviewOutput(BaseModel):
+    """Agent 3 --> output payload. A recommendation, NEVER a hiring decision."""
+
+    candidate_id: str
+    job_id: str = ""
+    match_score: float | None = Field(default=None, ge=0, le=100)
+    extraction_confidence: float = Field(default=0.0, ge=0, le=1)
+    matching_confidence: float = Field(default=0.0, ge=0, le=1)
+    recommendation_code: Literal[
+        "STRONG_MATCH", "POTENTIAL_MATCH", "INSUFFICIENT_EVIDENCE", "MANUAL_REVIEW"
+    ]
+    recommendation: str                         # display label shown to the recruiter
+    explanation: str
+    risk_flags: list[RiskFlag] = Field(default_factory=list)
+    privacy_check: PrivacyCheck
+    # The AI never decides. Pydantic rejects anything except True.
+    human_review_required: Literal[True] = True
+    reviewed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
