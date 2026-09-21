@@ -15,11 +15,17 @@ def response_detail(response: requests.Response) -> str:
     try:
         body = response.json()
     except ValueError:
-        return response.text or f"Request failed with status {response.status_code}."
-    return str(body.get("detail", body))
+        return f"HTTP {response.status_code}"
+    return str(body.get("detail") or f"HTTP {response.status_code}")
 
 
 def show_backend_error(exc: requests.RequestException) -> None:
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        st.error(
+            "Backend is not running. Start it with: "
+            "uvicorn backend.main:app --reload --port 8000"
+        )
+        return
     st.error(
         "Could not reach the FastAPI backend. Check that it is running and "
         f"available at {API_BASE_URL}."
@@ -42,10 +48,11 @@ if load_candidates:
         st.error("Enter a job ID to load candidates.")
     else:
         try:
-            response = requests.get(
-                f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
-            )
-            if response.status_code in (404, 422):
+            with st.spinner("Loading candidates..."):
+                response = requests.get(
+                    f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
+                )
+            if not response.ok:
                 st.error(response_detail(response))
             else:
                 response.raise_for_status()
@@ -77,13 +84,20 @@ if candidates:
         ),
     )
     st.session_state["audit_candidate_id"] = selected_candidate_id
+    batch_notes = candidate_by_id[selected_candidate_id].get("batch_notes", [])
+    for note in batch_notes:
+        if note.startswith("UNUSUAL_SCORE_PATTERN"):
+            st.warning(note)
+        else:
+            st.info(note)
 
     if selected_candidate_id != st.session_state.get("audit_loaded_candidate_id"):
         try:
-            response = requests.get(
-                f"{API_BASE_URL}/api/audit/{selected_candidate_id}", timeout=30
-            )
-            if response.status_code in (404, 422):
+            with st.spinner("Loading audit log..."):
+                response = requests.get(
+                    f"{API_BASE_URL}/api/audit/{selected_candidate_id}", timeout=30
+                )
+            if not response.ok:
                 st.error(response_detail(response))
                 st.session_state["audit_events"] = []
             else:
@@ -119,8 +133,11 @@ if events:
 st.divider()
 if st.button("Verify audit log integrity"):
     try:
-        response = requests.get(f"{API_BASE_URL}/api/audit-chain/verify", timeout=30)
-        if response.status_code in (404, 422):
+        with st.spinner("Verifying audit log integrity..."):
+            response = requests.get(
+                f"{API_BASE_URL}/api/audit-chain/verify", timeout=30
+            )
+        if not response.ok:
             st.error(response_detail(response))
         else:
             response.raise_for_status()
@@ -129,6 +146,6 @@ if st.button("Verify audit log integrity"):
                 st.success(f"Chain valid - {result.get('entries_checked', 0)} entries checked")
             else:
                 bad_id = result.get("first_bad_entry_id", "unknown")
-                st.error(f"Chain invalid at entry {bad_id} - possible tampering")
+                st.error(f"Possible tampering detected at entry {bad_id}")
     except requests.RequestException as exc:
         show_backend_error(exc)

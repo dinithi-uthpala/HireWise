@@ -23,6 +23,14 @@ API_BASE_URL = os.getenv(
 CREATE_JOB_URL = f"{API_BASE_URL}/api/agent2/jobs"
 
 
+def response_error(response: requests.Response) -> str:
+    try:
+        detail = response.json().get("detail")
+    except ValueError:
+        detail = None
+    return str(detail or f"HTTP {response.status_code}")
+
+
 # ---------------------------------------------------------------------
 # Page configuration
 # ---------------------------------------------------------------------
@@ -198,25 +206,20 @@ if submitted:
                                 "not be completed."
                             )
 
-                            try:
-                                requirement_error = (
-                                    requirements_response.json()
-                                )
-                            except ValueError:
-                                requirement_error = (
-                                    requirements_response.text
-                                )
+                            requirement_error = response_error(
+                                requirements_response
+                            )
 
                             with st.expander(
                                 "Requirement Analysis API Details"
                             ):
-                                st.json(requirement_error)
+                                st.write(requirement_error)
 
                     except requests.exceptions.ConnectionError:
 
                         st.warning(
-                            "Job was created, but the backend could "
-                            "not be reached for requirement analysis."
+                            "Backend is not running. Start it with: "
+                            "uvicorn backend.main:app --reload --port 8000"
                         )
 
                     except requests.exceptions.Timeout:
@@ -240,8 +243,7 @@ if submitted:
             elif response.status_code == 409:
 
                 st.error(
-                    "A job with this Job ID already exists. "
-                    "Please try again."
+                    f"{response_error(response)}. Please try again."
                 )
 
             # ---------------------------------------------------------
@@ -250,18 +252,13 @@ if submitted:
 
             else:
 
-                try:
-                    error_detail = response.json()
-                except ValueError:
-                    error_detail = response.text
-
                 st.error(
                     f"Failed to create job "
-                    f"(HTTP {response.status_code})."
+                    f"({response_error(response)})."
                 )
 
                 with st.expander("API Error Details"):
-                    st.json(error_detail)
+                    st.write(response_error(response))
 
         # -------------------------------------------------------------
         # Backend connection error
@@ -270,8 +267,8 @@ if submitted:
         except requests.exceptions.ConnectionError:
 
             st.error(
-                "Could not connect to the HireWise backend.\n\n"
-                "Please make sure the FastAPI server is running."
+                "Backend is not running. Start it with: "
+                "uvicorn backend.main:app --reload --port 8000"
             )
 
         # -------------------------------------------------------------

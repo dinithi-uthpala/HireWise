@@ -14,18 +14,16 @@ def response_detail(response: requests.Response) -> str:
     try:
         body = response.json()
     except ValueError:
-        return response.text or f"Request failed with status {response.status_code}."
-    return str(body.get("detail", body))
+        return f"HTTP {response.status_code}"
+    return str(body.get("detail") or f"HTTP {response.status_code}")
 
 
 st.title("Fairness Test")
 st.caption(
     "Identity details are removed before scoring, so candidates with equal "
-    "qualifications should score equally."
-)
-st.info(
-    "For a quick demo, use `fairness_pair_a_male.docx` and "
-    "`fairness_pair_b_female.docx` from `samples/cvs`."
+    "qualifications should score equally. For a quick demo, use "
+    "samples/cvs/fairness_pair_a_male.docx and "
+    "samples/cvs/fairness_pair_b_female.docx."
 )
 
 with st.form("fairness_test_form"):
@@ -71,15 +69,19 @@ if run_test:
                 )
                 if response.status_code in (400, 404):
                     st.error(response_detail(response))
+                elif not response.ok:
+                    st.error(response_detail(response))
                 else:
                     response.raise_for_status()
                     st.session_state["fairness_job_id"] = job_id
                     st.session_state["fairness_result"] = response.json()
-            except requests.RequestException:
+            except requests.exceptions.ConnectionError:
                 st.error(
-                    "Could not reach the FastAPI backend. Check that it is running "
-                    f"and available at {API_BASE_URL}."
+                    "Backend is not running. Start it with: "
+                    "uvicorn backend.main:app --reload --port 8000"
                 )
+            except requests.RequestException as exc:
+                st.error(f"Backend request failed: {exc}")
 
 result = st.session_state.get("fairness_result")
 if result:

@@ -14,11 +14,17 @@ def response_detail(response: requests.Response) -> str:
     try:
         body = response.json()
     except ValueError:
-        return response.text or f"Request failed with status {response.status_code}."
-    return str(body.get("detail", body))
+        return f"HTTP {response.status_code}"
+    return str(body.get("detail") or f"HTTP {response.status_code}")
 
 
-def show_backend_error() -> None:
+def show_backend_error(exc: requests.RequestException) -> None:
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        st.error(
+            "Backend is not running. Start it with: "
+            "uvicorn backend.main:app --reload --port 8000"
+        )
+        return
     st.error(
         "Could not reach the FastAPI backend. Check that it is running and "
         f"available at {API_BASE_URL}."
@@ -38,10 +44,11 @@ if load_candidates:
         st.error("Enter a job ID to load candidates.")
     else:
         try:
-            response = requests.get(
-                f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
-            )
-            if response.status_code in (404, 422):
+            with st.spinner("Loading candidates..."):
+                response = requests.get(
+                    f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
+                )
+            if not response.ok:
                 st.error(response_detail(response))
             else:
                 response.raise_for_status()
@@ -50,8 +57,8 @@ if load_candidates:
                 st.session_state.pop("detail_candidate_id", None)
                 st.session_state.pop("detail_loaded_candidate_id", None)
                 st.session_state.pop("detail_data", None)
-        except requests.RequestException:
-            show_backend_error()
+        except requests.RequestException as exc:
+            show_backend_error(exc)
 
 candidates = st.session_state.get("detail_candidates", [])
 if st.session_state.get("detail_job_id") and not candidates:
@@ -82,17 +89,18 @@ selected_candidate_id = st.selectbox(
 
 if selected_candidate_id != st.session_state.get("detail_loaded_candidate_id"):
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
-        )
-        if response.status_code in (404, 422):
+        with st.spinner("Loading candidate details..."):
+            response = requests.get(
+                f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
+            )
+        if not response.ok:
             st.error(response_detail(response))
             st.stop()
         response.raise_for_status()
         st.session_state["detail_data"] = response.json()
         st.session_state["detail_loaded_candidate_id"] = selected_candidate_id
-    except requests.RequestException:
-        show_backend_error()
+    except requests.RequestException as exc:
+        show_backend_error(exc)
         st.stop()
 
 detail = st.session_state.get("detail_data", {})

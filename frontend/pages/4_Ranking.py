@@ -15,19 +15,23 @@ def response_detail(response: requests.Response) -> str:
   try:
     body = response.json()
   except ValueError:
-    return response.text or f"Request failed with status {response.status_code}."
-  return str(body.get("detail", body))
+    return f"HTTP {response.status_code}"
+  return str(body.get("detail") or f"HTTP {response.status_code}")
 
 
 def load_candidates(job_id: str) -> list[dict]:
-  response = requests.get(
-    f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
-  )
-  if response.status_code == 404:
-    raise ValueError("That job was not found.")
-  if response.status_code == 422:
+  with st.spinner("Loading candidates..."):
+    try:
+      response = requests.get(
+        f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
+      )
+    except requests.exceptions.ConnectionError:
+      raise ValueError(
+        "Backend is not running. Start it with: "
+        "uvicorn backend.main:app --reload --port 8000"
+      )
+  if not response.ok:
     raise ValueError(response_detail(response))
-  response.raise_for_status()
   candidates = response.json()
   return sorted(
     candidates,
@@ -37,6 +41,12 @@ def load_candidates(job_id: str) -> list[dict]:
 
 
 def show_request_error(exc: Exception) -> None:
+  if isinstance(exc, requests.exceptions.ConnectionError):
+    st.error(
+      "Backend is not running. Start it with: "
+      "uvicorn backend.main:app --reload --port 8000"
+    )
+    return
   if isinstance(exc, requests.RequestException):
     st.error(
       "Could not reach the FastAPI backend. Check that it is running and "
@@ -99,16 +109,13 @@ selected_candidate_id = st.selectbox(
 )
 
 try:
-  detail_response = requests.get(
-    f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
-  )
-  if detail_response.status_code == 404:
-    st.error("That candidate could not be found. Reload the job results.")
-    st.stop()
-  if detail_response.status_code == 422:
+  with st.spinner("Loading candidate details..."):
+    detail_response = requests.get(
+      f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
+    )
+  if not detail_response.ok:
     st.error(response_detail(detail_response))
     st.stop()
-  detail_response.raise_for_status()
   detail = detail_response.json()
 except requests.RequestException as exc:
   show_request_error(exc)
@@ -205,17 +212,15 @@ with st.form("human_decision_form"):
 
 if save_decision:
   try:
-    decision_response = requests.post(
-      f"{API_BASE_URL}/api/candidates/{selected_candidate_id}/decision",
-      json={"decision": decision, "note": note},
-      timeout=30,
-    )
-    if decision_response.status_code == 404:
-      st.error(response_detail(decision_response))
-    elif decision_response.status_code == 422:
+    with st.spinner("Saving human decision..."):
+      decision_response = requests.post(
+        f"{API_BASE_URL}/api/candidates/{selected_candidate_id}/decision",
+        json={"decision": decision, "note": note},
+        timeout=30,
+      )
+    if not decision_response.ok:
       st.error(response_detail(decision_response))
     else:
-      decision_response.raise_for_status()
       st.session_state["candidate_results"] = load_candidates(
         st.session_state["results_job_id"]
       )

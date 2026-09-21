@@ -41,8 +41,13 @@ if st.button("Process CVs", type="primary", disabled=not uploaded_files):
                 files=payload,
                 timeout=120,
             )
+        except requests.exceptions.ConnectionError:
+            st.error(
+                "Backend is not running. Start it with: "
+                "uvicorn backend.main:app --reload --port 8000"
+            )
         except requests.RequestException as exc:
-            st.error(f"Could not reach the FastAPI backend: {exc}")
+            st.error(f"Backend request failed: {exc}")
         else:
             if response.ok:
                 results = response.json()
@@ -51,10 +56,13 @@ if st.button("Process CVs", type="primary", disabled=not uploaded_files):
                 st.success(f"Processed {len(results)} candidate(s).")
             else:
                 try:
-                    detail = response.json().get("detail", response.text)
+                    detail = response.json().get("detail")
                 except ValueError:
-                    detail = response.text
-                st.error(f"The pipeline could not process the upload: {detail}")
+                    detail = None
+                st.error(
+                    "The pipeline could not process the upload: "
+                    f"{detail or f'HTTP {response.status_code}'}"
+                )
 
 results = st.session_state.get("pipeline_results", [])
 if results:
