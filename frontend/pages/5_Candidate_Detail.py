@@ -145,6 +145,16 @@ elif summary.get("extraction_confidence", 0) < 0.75:
     st.warning("Low extraction confidence. Review the original CV before relying on this result.")
 st.info("Recruiter review required. The AI does not make the final hiring decision.")
 
+st.markdown("#### AI assessment")
+assessment_method = review.get("explanation_method", "rule_template")
+if assessment_method == "llm_reworded":
+    st.success("Gemini reviewed the rule-based evidence and rewrote the explanation. Scores and flags remain deterministic.")
+elif assessment_method == "llm_fallback":
+    st.info("Gemini was unavailable, so the deterministic explanation is shown. Scores and flags remain valid.")
+else:
+    st.info("Deterministic explanation shown. The fixed scoring rules remain the source of truth.")
+st.write("**AI recommendation:**", summary.get("recommendation", "No recommendation provided."))
+
 st.markdown("#### Why this score?")
 st.caption("The score is shown with its component evidence and review signals.")
 
@@ -160,6 +170,41 @@ for component in component_labels:
     component_score = breakdown.get(component, 0)
     st.write(f"**{component_labels[component]}: {component_score:.1f}**")
     st.progress(max(0.0, min(float(component_score) / 100, 1.0)))
+
+score_evidence = match.get("score_evidence", {})
+experience_evidence = score_evidence.get("experience", {})
+education_evidence = score_evidence.get("education", {})
+
+st.markdown("#### Evidence checked")
+evidence_left, evidence_right = st.columns(2)
+with evidence_left:
+    st.write("**Experience**")
+    candidate_years = experience_evidence.get("candidate_years", 0.0)
+    required_years = experience_evidence.get("required_years", 0.0)
+    st.write(f"Candidate evidence: **{candidate_years:.2f} years**")
+    st.write(f"Role requirement: **{required_years:.2f} years**")
+    st.write(experience_evidence.get("evidence", "No experience evidence recorded."))
+    if required_years > 0 and candidate_years < required_years:
+        st.warning("Experience requirement is not fully evidenced; recruiter verification is recommended.")
+    elif required_years > 0:
+        st.success("Experience requirement is supported by the extracted dated experience.")
+    else:
+        st.info("This role has no minimum experience requirement, so full experience-component credit is expected.")
+
+with evidence_right:
+    st.write("**Education and certifications**")
+    st.write(f"Candidate education: {', '.join(education_evidence.get('candidate_education', [])) or 'None extracted'}")
+    st.write(f"Required education: {education_evidence.get('required_education') or 'Not specified'}")
+    st.write(f"Education status: **{education_evidence.get('education_match_status', 'unknown').replace('_', ' ').title()}**")
+    required_certs = education_evidence.get("required_certifications", [])
+    matched_certs = education_evidence.get("matched_certifications", [])
+    st.write(f"Certifications required: {', '.join(required_certs) or 'None'}")
+    st.write(f"Certifications matched: {', '.join(matched_certs) or 'None'}")
+    st.write(education_evidence.get("evidence", "No education evidence recorded."))
+    if education_evidence.get("education_match_status") in {"missing", "uncertain"}:
+        st.warning("Education evidence is incomplete or uncertain; recruiter verification is recommended.")
+    elif education_evidence.get("education_match_status") == "matched":
+        st.success("Education requirement is supported by the extracted profile.")
 
 st.write("**Matched skills**")
 matched_mandatory = match.get("matched_mandatory_skills", [])
