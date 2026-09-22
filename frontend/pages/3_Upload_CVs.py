@@ -36,22 +36,75 @@ try:
 except requests.RequestException:
     st.warning("Agent status is unavailable; processing may still continue.")
 
-job_id = st.text_input("Job ID", value=st.session_state.get("upload_job_id", ""))
+jobs: list[dict] = []
+try:
+    jobs_response = requests.get(
+        f"{API_BASE_URL}/api/agent2/jobs",
+        headers=auth_headers(),
+        timeout=15,
+    )
+    if jobs_response.ok:
+        jobs = jobs_response.json()
+    else:
+        st.error("The saved job library could not be loaded.")
+except requests.RequestException:
+    st.error("Backend is not running. Start FastAPI before selecting a job.")
+
+if not jobs:
+    st.stop()
+
+job_options = {job["job_title"]: job for job in jobs}
+selected_title = st.selectbox(
+    "Select a job role",
+    list(job_options),
+    index=(
+        list(job_options).index(st.session_state["upload_job_title"])
+        if st.session_state.get("upload_job_title") in job_options
+        else 0
+    ),
+)
+selected_job = job_options[selected_title]
+job_id = selected_job["job_id"]
+st.session_state["upload_job_id"] = job_id
+st.session_state["upload_job_title"] = selected_title
+with st.expander("View selected job description", expanded=True):
+    st.write(selected_job["job_description"])
+
+upload_mode = st.radio(
+    "Candidate upload mode",
+    ["Single candidate", "Multiple candidates"],
+    horizontal=True,
+    help="Use Multiple candidates to upload and process a batch of CVs for the same job.",
+)
+multiple_candidates = upload_mode == "Multiple candidates"
 
 files = st.file_uploader(
-    "Choose CV files",
+    "Choose candidate CV files",
     type=["pdf", "docx", "txt", "md"],
-    accept_multiple_files=True,
+    accept_multiple_files=multiple_candidates,
     help="Files are validated, PII-redacted, parsed, and encrypted by Agent 1.",
 )
 
-uploaded_files = files or []
+if multiple_candidates:
+    uploaded_files = list(files or [])
+else:
+    uploaded_files = [files] if files is not None else []
 
-if st.button("Process CVs", type="primary", disabled=not uploaded_files):
+if multiple_candidates:
+    st.caption("Batch mode: all selected CVs will be matched against the same Job ID.")
+if uploaded_files:
+    st.success(f"{len(uploaded_files)} candidate CV(s) selected")
+    st.dataframe(
+        pd.DataFrame(
+            [{"File": file.name, "Size (KB)": round(len(file.getvalue()) / 1024, 1)} for file in uploaded_files]
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+process_label = "Process candidate batch" if multiple_candidates else "Process candidate CV"
+if st.button(process_label, type="primary", disabled=not uploaded_files):
     job_id = job_id.strip()
-    if not job_id:
-        st.error("Enter a job ID before processing CVs.")
-        st.stop()
     payload = [
         ("files", (file.name, file.getvalue(), file.type or "application/octet-stream"))
         for file in uploaded_files

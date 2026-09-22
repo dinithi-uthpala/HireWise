@@ -12,6 +12,11 @@ try:
 except ModuleNotFoundError:
   from auth import auth_headers, require_login
 
+try:
+  from frontend.job_selection import select_saved_job
+except ModuleNotFoundError:
+  from job_selection import select_saved_job
+
 require_login()
 
 try:
@@ -77,22 +82,22 @@ st.warning("Recruiter review required")
 if saved_decision := st.session_state.pop("saved_decision", None):
   st.success(saved_decision)
 
-with st.form("load_candidates_form"):
-  job_id = st.text_input("Job ID", value=st.session_state.get("results_job_id", ""))
-  load = st.form_submit_button("Load candidates", type="primary")
+selected_job = select_saved_job(
+  API_BASE_URL,
+  auth_headers(),
+  "results_job_title",
+)
+load = st.button("Load candidates", type="primary", disabled=selected_job is None)
 
 if load:
-  job_id = job_id.strip()
-  if not job_id:
-    st.error("Enter a job ID to load candidate results.")
-  else:
-    try:
-      st.session_state["results_job_id"] = job_id
-      st.session_state["candidate_results"] = load_candidates(job_id)
-      st.session_state.pop("selected_candidate_id", None)
-    except (requests.RequestException, ValueError) as exc:
-      st.session_state["candidate_results"] = []
-      show_request_error(exc)
+  try:
+    job_id = selected_job["job_id"]
+    st.session_state["results_job_id"] = job_id
+    st.session_state["candidate_results"] = load_candidates(job_id)
+    st.session_state.pop("selected_candidate_id", None)
+  except (requests.RequestException, ValueError) as exc:
+    st.session_state["candidate_results"] = []
+    show_request_error(exc)
 
 candidates = st.session_state.get("candidate_results", [])
 if not candidates:
@@ -174,12 +179,24 @@ summary = detail.get("summary", {})
 
 st.subheader(f"Review: {selected_candidate_id}")
 left, right = st.columns(2)
+score = match.get("match_score")
+match_available = match.get("match_status") != "unavailable" and score is not None
 left.metric(
   "Overall score",
-  "Not available" if match.get("match_score") is None else f"{match['match_score']:.1f}",
+  f"{score:.1f}" if match_available else "Not available",
 )
 right.write("**Recommendation**")
 right.write(summary.get("recommendation", "No recommendation provided."))
+
+confidence_left, confidence_right = st.columns(2)
+confidence_left.metric("Extraction confidence", f"{summary.get('extraction_confidence', 0):.0%}")
+confidence_right.metric("Matching confidence", f"{review.get('matching_confidence', 0):.0%}")
+if not match_available:
+  st.error("No reliable match score was produced. Check the job requirements and CV extraction.")
+elif summary.get("extraction_confidence", 0) < 0.75:
+  st.warning("Low extraction confidence. Review the original CV before relying on this result.")
+if review.get("human_review_required", True):
+  st.info("Recruiter review required. The AI does not make the final hiring decision.")
 
 st.markdown("#### Score breakdown")
 breakdown = match.get("score_breakdown", {})
@@ -224,7 +241,19 @@ else:
   st.write("None recorded")
 
 st.write("**Explanation**")
-st.write(review.get("explanation", "No explanation provided."))
+method = review.get("explanation_method", "rule_template")
+st.caption("Explanation source: " + ("Gemini LLM rewrite" if method == "llm_reworded" else "Deterministic fallback"))
+st.write(review.get("explanation", "No explanation provided.").split("Points for the recruiter to check:")[0].strip())
+
+st.write("**Recommended recruiter checks**")
+checks = []
+if not match_available:
+  checks.append("Add clear mandatory or preferred requirements to the job description.")
+if summary.get("extraction_confidence", 0) < 0.75:
+  checks.append("Verify the CV text, experience dates, and education manually.")
+checks.extend(flag.get("message", "Review the flagged issue.") for flag in review.get("risk_flags", []))
+for check in dict.fromkeys(checks):
+  st.warning(check)
 
 privacy = review.get("privacy_check", {})
 st.write("**Privacy check**")

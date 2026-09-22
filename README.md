@@ -94,6 +94,11 @@ The dashboard also provides candidate comparison, CSV exports, candidate
 explanation PDFs, audit CSV/PDF exports, agent activity milestones, Gemini
 configuration status, deterministic fallback, and manual-review alerts.
 
+Recommendation codes are produced by deterministic Responsible-AI rules from
+the score, evidence, confidence, and risk flags. Gemini may rewrite the
+explanation for readability, but it cannot make the hiring decision or change
+the recommendation facts; the recruiter makes the final decision.
+
 ## Responsible AI features
 
 - Agent 1 removes personal and sensitive identity details before matching.

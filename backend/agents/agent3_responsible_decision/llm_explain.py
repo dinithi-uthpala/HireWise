@@ -3,9 +3,9 @@
 The deterministic explanation (explain.py) is ALWAYS built first, from fixed
 rules. An LLM may only re-word it for readability. Safeguards:
   - OFF unless LLM_PROVIDER is openai or gemini AND an API key is set
-  - never called when the privacy check failed (no data leaves the system)
-  - the prompt contains only the rule-based explanation text (anonymous:
+    - receives only the rule-based explanation text (anonymous:
     candidate ID, scores, skill names) and treats it as DATA, not instructions
+    - never receives raw CV text or detected PII, even when the privacy check failed
   - the reply is rejected (and the original text kept) if it drops or changes
     any number, skill, label or the human-decision sentence, or adds personal
     data, prohibited attributes or the word "rejected"
@@ -61,7 +61,7 @@ def explanation_is_faithful(original: str, rewritten: str, required_terms: list[
 def enhance_explanation(review: ReviewOutput, match: MatchResult,
                         llm: LlmCallable | None) -> ReviewOutput:
     """Return `review` with an LLM-polished explanation, or unchanged."""
-    if llm is None or not review.privacy_check.passed:
+    if llm is None:
         return review
 
     original = review.explanation
@@ -70,7 +70,7 @@ def enhance_explanation(review: ReviewOutput, match: MatchResult,
         text = llm(prompt)
     except Exception as exc:  # network, quota, bad key ... never fatal
         logger.error("LLM explanation failed (%s); keeping rule-based text", type(exc).__name__)
-        return review
+        return review.model_copy(update={"explanation_method": "llm_fallback"})
 
     terms = [review.candidate_id, review.recommendation]
     terms += match.matched_mandatory_skills + match.matched_preferred_skills
@@ -79,8 +79,11 @@ def enhance_explanation(review: ReviewOutput, match: MatchResult,
 
     if text is None or not explanation_is_faithful(original, text, terms):
         logger.info("LLM rewrite rejected by the faithfulness check; keeping rule-based text")
-        return review
-    return review.model_copy(update={"explanation": text.strip() + "\n\n" + LLM_NOTE})
+        return review.model_copy(update={"explanation_method": "llm_fallback"})
+    return review.model_copy(update={
+        "explanation": text.strip() + "\n\n" + LLM_NOTE,
+        "explanation_method": "llm_reworded",
+    })
 
 
 # ---------------------------------------------------------------------------

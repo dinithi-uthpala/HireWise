@@ -7,13 +7,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from backend.agents.agent2_job_matching.agent import match_candidate_to_job
 from backend.agents.agent2_job_matching.requirements import (
     extract_job_requirements,
 )
 from backend.database import get_session
+from backend.job_catalog import CATALOG_JOBS
 from backend.models import JobVacancy
 from backend.schemas import (
     CandidateProfile,
@@ -80,6 +81,27 @@ router = APIRouter(
     prefix="/agent2",
     tags=["Agent 2 - Job Matching"],
 )
+
+
+@router.get("/jobs", response_model=list[JobOut])
+def list_jobs(session: Session = Depends(get_session)) -> list[JobOut]:
+    """Return the curated built-in job library for recruiter selection."""
+    jobs_by_id = {
+        job.job_id: job
+        for job in session.exec(select(JobVacancy)).all()
+        if job.job_id in {item.job_id for item in CATALOG_JOBS}
+    }
+    unique_jobs = [jobs_by_id[item.job_id] for item in CATALOG_JOBS if item.job_id in jobs_by_id]
+    unique_jobs.sort(key=lambda job: job.job_title.lower())
+    return [
+        JobOut(
+            job_id=job.job_id,
+            job_title=job.job_title,
+            job_description=job.job_description,
+            created_at=job.created_at,
+        )
+        for job in unique_jobs
+    ]
 
 
 # ---------------------------------------------------------------------

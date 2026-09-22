@@ -12,6 +12,11 @@ try:
 except ModuleNotFoundError:
     from auth import auth_headers, require_login
 
+try:
+    from frontend.job_selection import select_saved_job
+except ModuleNotFoundError:
+    from job_selection import select_saved_job
+
 require_login()
 
 try:
@@ -50,33 +55,37 @@ st.caption(
     "an old entry is detected."
 )
 
-with st.form("load_candidates_form"):
-    job_id = st.text_input("Job ID", value=st.session_state.get("audit_job_id", ""))
-    load_candidates = st.form_submit_button("Load candidates", type="primary")
+selected_job = select_saved_job(
+    API_BASE_URL,
+    auth_headers(),
+    "audit_job_title",
+)
+load_candidates = st.button(
+    "Load candidates",
+    type="primary",
+    disabled=selected_job is None,
+)
 
 if load_candidates:
-    job_id = job_id.strip()
-    if not job_id:
-        st.error("Enter a job ID to load candidates.")
-    else:
-        try:
-            with st.spinner("Loading candidates..."):
-                response = requests.get(
-                    f"{API_BASE_URL}/api/jobs/{job_id}/candidates",
-                    headers=auth_headers(),
-                    timeout=30,
-                )
-            if not response.ok:
-                st.error(response_detail(response))
-            else:
-                response.raise_for_status()
-                st.session_state["audit_job_id"] = job_id
-                st.session_state["audit_candidates"] = response.json()
-                st.session_state.pop("audit_candidate_id", None)
-                st.session_state.pop("audit_events", None)
-                st.session_state.pop("audit_loaded_candidate_id", None)
-        except requests.RequestException as exc:
-            show_backend_error(exc)
+    job_id = selected_job["job_id"]
+    try:
+        with st.spinner("Loading candidates..."):
+            response = requests.get(
+                f"{API_BASE_URL}/api/jobs/{job_id}/candidates",
+                headers=auth_headers(),
+                timeout=30,
+            )
+        if not response.ok:
+            st.error(response_detail(response))
+        else:
+            response.raise_for_status()
+            st.session_state["audit_job_id"] = job_id
+            st.session_state["audit_candidates"] = response.json()
+            st.session_state.pop("audit_candidate_id", None)
+            st.session_state.pop("audit_events", None)
+            st.session_state.pop("audit_loaded_candidate_id", None)
+    except requests.RequestException as exc:
+        show_backend_error(exc)
 
 candidates = st.session_state.get("audit_candidates", [])
 if st.session_state.get("audit_job_id") and not candidates:

@@ -11,6 +11,11 @@ try:
 except ModuleNotFoundError:
     from auth import auth_headers, require_login
 
+try:
+    from frontend.job_selection import select_saved_job
+except ModuleNotFoundError:
+    from job_selection import select_saved_job
+
 require_login()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
@@ -33,8 +38,13 @@ st.caption(
     "samples/cvs/fairness_pair_b_female.docx."
 )
 
+selected_job = select_saved_job(
+    API_BASE_URL,
+    auth_headers(),
+    "fairness_job_title",
+)
+
 with st.form("fairness_test_form"):
-    job_id = st.text_input("Job ID", value=st.session_state.get("fairness_job_id", ""))
     file_a = st.file_uploader(
         "CV A",
         type=["pdf", "docx", "txt"],
@@ -55,12 +65,12 @@ with st.form("fairness_test_form"):
     run_test = st.form_submit_button("Run fairness test", type="primary")
 
 if run_test:
-    job_id = job_id.strip()
-    if not job_id:
-        st.error("Enter a job ID before running the fairness test.")
+    if selected_job is None:
+        st.error("Select a saved job role before running the fairness test.")
     elif not file_a or not file_b:
         st.error("Upload both CV A and CV B before running the fairness test.")
     else:
+        job_id = selected_job["job_id"]
         form_data = {"job_id": job_id, "tolerance": str(tolerance)}
         files = {
             "file_a": (file_a.name, file_a.getvalue(), file_a.type or "application/octet-stream"),

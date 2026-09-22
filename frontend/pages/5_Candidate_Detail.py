@@ -11,6 +11,11 @@ try:
 except ModuleNotFoundError:
     from auth import auth_headers, require_login
 
+try:
+    from frontend.job_selection import select_saved_job
+except ModuleNotFoundError:
+    from job_selection import select_saved_job
+
 require_login()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
@@ -41,33 +46,37 @@ def show_backend_error(exc: requests.RequestException) -> None:
 st.title("Candidate Detail")
 st.caption("Review the evidence behind a candidate's matching score.")
 
-with st.form("load_candidate_details_form"):
-    job_id = st.text_input("Job ID", value=st.session_state.get("detail_job_id", ""))
-    load_candidates = st.form_submit_button("Load candidates", type="primary")
+selected_job = select_saved_job(
+    API_BASE_URL,
+    auth_headers(),
+    "detail_job_title",
+)
+load_candidates = st.button(
+    "Load candidates",
+    type="primary",
+    disabled=selected_job is None,
+)
 
 if load_candidates:
-    job_id = job_id.strip()
-    if not job_id:
-        st.error("Enter a job ID to load candidates.")
-    else:
-        try:
-            with st.spinner("Loading candidates..."):
-                response = requests.get(
-                    f"{API_BASE_URL}/api/jobs/{job_id}/candidates",
-                    headers=auth_headers(),
-                    timeout=30,
-                )
-            if not response.ok:
-                st.error(response_detail(response))
-            else:
-                response.raise_for_status()
-                st.session_state["detail_job_id"] = job_id
-                st.session_state["detail_candidates"] = response.json()
-                st.session_state.pop("detail_candidate_id", None)
-                st.session_state.pop("detail_loaded_candidate_id", None)
-                st.session_state.pop("detail_data", None)
-        except requests.RequestException as exc:
-            show_backend_error(exc)
+    job_id = selected_job["job_id"]
+    try:
+        with st.spinner("Loading candidates..."):
+            response = requests.get(
+                f"{API_BASE_URL}/api/jobs/{job_id}/candidates",
+                headers=auth_headers(),
+                timeout=30,
+            )
+        if not response.ok:
+            st.error(response_detail(response))
+        else:
+            response.raise_for_status()
+            st.session_state["detail_job_id"] = job_id
+            st.session_state["detail_candidates"] = response.json()
+            st.session_state.pop("detail_candidate_id", None)
+            st.session_state.pop("detail_loaded_candidate_id", None)
+            st.session_state.pop("detail_data", None)
+    except requests.RequestException as exc:
+        show_backend_error(exc)
 
 candidates = st.session_state.get("detail_candidates", [])
 if st.session_state.get("detail_job_id") and not candidates:
@@ -75,7 +84,7 @@ if st.session_state.get("detail_job_id") and not candidates:
     st.stop()
 
 if not candidates:
-    st.info("Enter a job ID and load candidates to view candidate details.")
+    st.info("Select a saved job role and load candidates to view candidate details.")
     st.stop()
 
 candidate_by_id = {candidate["candidate_id"]: candidate for candidate in candidates}
@@ -121,10 +130,20 @@ summary = detail.get("summary", {})
 
 st.subheader(f"Candidate: {selected_candidate_id}")
 score = match.get("match_score")
+match_available = match.get("match_status") != "unavailable" and score is not None
 left, right = st.columns(2)
-left.metric("Overall score", "Not available" if score is None else f"{score:.1f}")
+left.metric("Overall score", f"{score:.1f}" if match_available else "Not available")
 right.write("**Recommendation**")
 right.write(summary.get("recommendation", "No recommendation provided."))
+
+confidence_left, confidence_right = st.columns(2)
+confidence_left.metric("Extraction confidence", f"{summary.get('extraction_confidence', 0):.0%}")
+confidence_right.metric("Matching confidence", f"{review.get('matching_confidence', 0):.0%}")
+if not match_available:
+    st.error("No reliable match score was produced. Check the job requirements and CV extraction.")
+elif summary.get("extraction_confidence", 0) < 0.75:
+    st.warning("Low extraction confidence. Review the original CV before relying on this result.")
+st.info("Recruiter review required. The AI does not make the final hiring decision.")
 
 st.markdown("#### Why this score?")
 st.caption("The score is shown with its component evidence and review signals.")
@@ -176,7 +195,19 @@ else:
     st.write("No uncertain matches recorded.")
 
 st.write("**Explanation**")
-st.write(review.get("explanation", "No explanation provided."))
+method = review.get("explanation_method", "rule_template")
+st.caption("Explanation source: " + ("Gemini LLM rewrite" if method == "llm_reworded" else "Deterministic fallback"))
+st.write(review.get("explanation", "No explanation provided.").split("Points for the recruiter to check:")[0].strip())
+
+st.write("**Recommended recruiter checks**")
+checks = []
+if not match_available:
+    checks.append("Add clear mandatory or preferred requirements to the job description.")
+if summary.get("extraction_confidence", 0) < 0.75:
+    checks.append("Verify the CV text, experience dates, and education manually.")
+checks.extend(flag.get("message", "Review the flagged issue.") for flag in review.get("risk_flags", []))
+for check in dict.fromkeys(checks):
+    st.warning(check)
 
 st.write("**Risk flags**")
 risk_flags = review.get("risk_flags", [])

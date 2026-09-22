@@ -57,7 +57,7 @@ def save_pipeline_result(session: Session, job_id: str, extraction: ExtractionRe
         "risk_flags": [f.code for f in review.risk_flags],
         "privacy_check_passed": review.privacy_check.passed,
         "human_review_required": True,
-        "explanation_method": "llm_reworded" if LLM_NOTE in review.explanation else "rule_template",
+        "explanation_method": review.explanation_method,
     })
     return rec
 

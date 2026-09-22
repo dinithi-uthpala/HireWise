@@ -18,6 +18,13 @@ def test_pii_is_redacted_without_raw_values() -> None:
     assert "+94 77 123 4567" not in report.redacted_text
 
 
+def test_parenthesized_international_phone_is_redacted() -> None:
+    report = PIIDetector(use_nlp=False).redact("Contact: (+94)76 0837 551")
+
+    assert "(+94)76 0837 551" not in report.redacted_text
+    assert "[PHONE]" in report.redacted_text
+
+
 def test_upload_rejects_disguised_executable() -> None:
     try:
         validate_upload("resume.txt", b"MZ" + b"bad executable")

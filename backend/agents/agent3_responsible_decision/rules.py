@@ -36,7 +36,7 @@ LABELS = {
 
 # --- privacy patterns -------------------------------------------------------
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-_PHONE_CANDIDATE = re.compile(r"\+?\d[\d\s().-]{6,}\d")
+_PHONE_CANDIDATE = re.compile(r"\(?\+?\d[\d\s().-]{6,}\d\)?")
 # Sri Lankan NIC: 9 digits + V/X (old) or 12 digits (new)
 _NIC = re.compile(r"(?<!\d)(?:\d{9}[VvXx]|\d{12})(?!\d)")
 # Personal attributes that must never influence (or appear in) scoring evidence
