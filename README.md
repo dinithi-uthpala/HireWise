@@ -1,7 +1,7 @@
 # HireWise
 
 **A Responsible Multi-Agent AI System for Explainable Candidate Shortlisting**
-*Information Retrieval and Web Analytics (IT3041) — Group Assignment*
+*Information Retrieval and Web Analytics (IT3041) —  Group Assignment*
 
 ## One-line description
 
