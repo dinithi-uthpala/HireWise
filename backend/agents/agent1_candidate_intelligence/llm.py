@@ -46,6 +46,7 @@ class LLMEnhancer:
     def __init__(self, settings: Settings) -> None:
         self.provider = (settings.llm_provider or "none").lower()
         self.model = settings.llm_model
+        self.last_error: str | None = None
         self._api_key = ""
         self._base_url = settings.openai_base_url
         if self.provider == "gemini" and settings.google_api_key:
@@ -67,10 +68,12 @@ class LLMEnhancer:
         """Ask the LLM for structured data. Returns dict or None on any failure."""
         if not self.available():
             return None
+        self.last_error = None
         try:
             raw = self._call(redacted_text)
             return self._parse_json(raw)
         except Exception as exc:  # never break the pipeline on LLM issues
+            self.last_error = f"{self.provider} enhancement unavailable; deterministic extraction used."
             logger.warning("LLM enhancement failed (%s): %s", self.provider, exc)
             return None
 

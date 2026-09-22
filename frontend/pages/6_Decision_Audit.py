@@ -14,6 +14,11 @@ except ModuleNotFoundError:
 
 require_login()
 
+try:
+    from frontend.reporting import audit_pdf
+except ModuleNotFoundError:
+    from reporting import audit_pdf
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -133,6 +138,18 @@ if events:
         for event in events
     ]
     st.dataframe(pd.DataFrame(event_rows), use_container_width=True, hide_index=True)
+    st.download_button(
+        "Download audit CSV",
+        pd.DataFrame(event_rows).to_csv(index=False).encode("utf-8"),
+        file_name=f"{st.session_state['audit_candidate_id']}_audit.csv",
+        mime="text/csv",
+    )
+    st.download_button(
+        "Download audit PDF",
+        audit_pdf(st.session_state["audit_candidate_id"], events),
+        file_name=f"{st.session_state['audit_candidate_id']}_audit.pdf",
+        mime="application/pdf",
+    )
 
     st.subheader("Entry details")
     for event in events:

@@ -6,11 +6,19 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from backend.agents.agent2_job_matching import agent as agent2_agent
+from backend.config import get_settings
 from backend.main import app
 from backend.schemas import MatchResult, RetrievalEvidence
 
 
 client = TestClient(app)
+settings = get_settings()
+login = client.post(
+    "/api/auth/login",
+    data={"username": settings.admin_username, "password": settings.admin_password},
+)
+login.raise_for_status()
+client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
 
 
 VALID_REQUEST = {

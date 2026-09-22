@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
@@ -37,9 +37,12 @@ class Settings(BaseSettings):
     app_name: str = "HireWise"
     debug: bool = True
     database_url: str = "sqlite:///./data/hirewise.db"
+    cors_origins: str = "http://localhost:8501,http://127.0.0.1:8501"
 
     # --- security --------------------------------------------------------------
     secret_key: str = "change-me-to-a-long-random-string"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 480
     encryption_key: str = ""            # optional Fernet key (32-byte url-safe base64)
 
     # --- upload rules (used by Agent 1's intake boundary) ----------------------
@@ -65,6 +68,18 @@ class Settings(BaseSettings):
         }:
             return True
         return value
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        """Reject known development credentials when debug is disabled."""
+        if not self.debug:
+            if self.secret_key == "change-me-to-a-long-random-string":
+                raise ValueError("SECRET_KEY must be changed when DEBUG=false")
+            if self.admin_password == "admin123":
+                raise ValueError("ADMIN_PASSWORD must be changed when DEBUG=false")
+            if not self.encryption_key or self.encryption_key.startswith("placeholder"):
+                raise ValueError("ENCRYPTION_KEY must be configured when DEBUG=false")
+        return self
 
     # optional LLM enhancement (none | gemini | openai | ollama)
     llm_provider: str = "none"
@@ -94,6 +109,10 @@ class Settings(BaseSettings):
     @property
     def allowed_ext_list(self) -> list[str]:
         return [e.strip().lower() for e in self.allowed_extensions.split(",") if e.strip()]
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

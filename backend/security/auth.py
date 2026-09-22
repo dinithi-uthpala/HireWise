@@ -17,15 +17,15 @@ def authenticate_admin(username: str, password: str) -> bool:
 def create_access_token(username: str) -> str:
     """Create a short-lived JWT for the authenticated administrator."""
     settings = get_settings()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=480)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {"sub": username, "role": "admin", "exp": expires_at}
-    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
 def decode_access_token(token: str) -> dict[str, object]:
     """Decode and validate an admin JWT, raising on invalid credentials."""
     settings = get_settings()
-    payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
     if payload.get("role") != "admin" or not payload.get("sub"):
         raise jwt.InvalidTokenError("Admin token required")
     return payload

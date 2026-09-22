@@ -20,6 +20,22 @@ st.title("Candidate Intelligence")
 st.caption("Upload CVs to extract an anonymous, job-relevant profile.")
 st.warning("Recruiter review required")
 
+try:
+    status_response = requests.get(
+        f"{API_BASE_URL}/api/agent1/status",
+        headers=auth_headers(),
+        timeout=10,
+    )
+    if status_response.ok:
+        status_data = status_response.json()
+        mode = status_data.get("extraction_mode", "deterministic_fallback")
+        if mode == "llm_configured":
+            st.success(f"Gemini configured: {status_data.get('llm_provider', 'gemini')} (deterministic fallback remains enabled)")
+        else:
+            st.info("Deterministic extraction fallback active; CV processing remains available.")
+except requests.RequestException:
+    st.warning("Agent status is unavailable; processing may still continue.")
+
 job_id = st.text_input("Job ID", value=st.session_state.get("upload_job_id", ""))
 
 files = st.file_uploader(
@@ -104,3 +120,11 @@ if results:
                     column.error(f"Failed\n\n{step}")
             if not succeeded and result.get("error"):
                 st.error(result["error"])
+            if result.get("activity"):
+                st.write("**Agent activity**")
+                for step in result["activity"]:
+                    st.success(step)
+            if succeeded and candidate.get("match_score") is not None:
+                confidence = candidate.get("extraction_confidence", 0.0)
+                if confidence < 0.75 or candidate.get("status") == "awaiting_human_review":
+                    st.warning("Manual review required before any recruiter decision.")

@@ -90,6 +90,10 @@ python -m pytest tests -q
 - `GET /api/audit/{candidate_id}` - read a candidate audit trail.
 - `GET /api/audit-chain/verify` - verify the audit hash chain.
 
+The dashboard also provides candidate comparison, CSV exports, candidate
+explanation PDFs, audit CSV/PDF exports, agent activity milestones, Gemini
+configuration status, deterministic fallback, and manual-review alerts.
+
 ## Responsible AI features
 
 - Agent 1 removes personal and sensitive identity details before matching.

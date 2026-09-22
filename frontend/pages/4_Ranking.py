@@ -14,6 +14,11 @@ except ModuleNotFoundError:
 
 require_login()
 
+try:
+  from frontend.reporting import candidate_pdf
+except ModuleNotFoundError:
+  from reporting import candidate_pdf
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -107,6 +112,30 @@ summary_rows = [
   for candidate in candidates
 ]
 st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+st.download_button(
+  "Download comparison CSV",
+  pd.DataFrame(summary_rows).to_csv(index=False).encode("utf-8"),
+  file_name="hirewise_candidate_comparison.csv",
+  mime="text/csv",
+)
+
+comparison_ids = st.multiselect(
+  "Compare candidates",
+  [candidate["candidate_id"] for candidate in candidates],
+  max_selections=2,
+)
+if len(comparison_ids) == 2:
+  compared = [next(item for item in candidates if item["candidate_id"] == cid) for cid in comparison_ids]
+  st.markdown("#### Candidate comparison")
+  st.dataframe(
+    pd.DataFrame([
+      {"Metric": "Score", compared[0]["candidate_id"]: compared[0].get("match_score"), compared[1]["candidate_id"]: compared[1].get("match_score")},
+      {"Metric": "Extraction confidence", compared[0]["candidate_id"]: compared[0].get("extraction_confidence"), compared[1]["candidate_id"]: compared[1].get("extraction_confidence")},
+      {"Metric": "Risk flags", compared[0]["candidate_id"]: ", ".join(compared[0].get("risk_flag_codes", [])) or "None", compared[1]["candidate_id"]: ", ".join(compared[1].get("risk_flag_codes", [])) or "None"},
+    ]),
+    use_container_width=True,
+    hide_index=True,
+  )
 
 candidate_ids = [candidate["candidate_id"] for candidate in candidates]
 default_candidate = st.session_state.get("selected_candidate_id", candidate_ids[0])
@@ -131,6 +160,13 @@ try:
 except requests.RequestException as exc:
   show_request_error(exc)
   st.stop()
+
+st.download_button(
+  "Download candidate explanation PDF",
+  candidate_pdf(selected_candidate_id, detail),
+  file_name=f"{selected_candidate_id}_explanation.pdf",
+  mime="application/pdf",
+)
 
 match = detail.get("match", {})
 review = detail.get("review", {})

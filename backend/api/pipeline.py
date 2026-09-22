@@ -49,6 +49,7 @@ class PipelineItem(BaseModel):
     status: Literal["processed", "error"]
     candidate: CandidateSummary | None = None
     error: str = ""
+    activity: list[str] = []
 
 
 def run_agents(filename: str, data: bytes, job: JobVacancy,
@@ -94,15 +95,21 @@ async def run_pipeline(
         data = await upload.read()
         if not name:
             items.append(PipelineItem(filename="(no name)", status="error",
-                                      error="Every upload needs a filename."))
+                                      error="Every upload needs a filename.",
+                                      activity=["Upload rejected"]))
             continue
         try:
             extraction, match, review = run_agents(name, data, job, thresholds)
             record = save_pipeline_result(session, job_id, extraction, match, review)
             items.append(PipelineItem(filename=name, status="processed",
-                                      candidate=to_summary(record)))
+                                      candidate=to_summary(record), activity=[
+                                          "Agent 1: CV extracted and PII anonymized",
+                                          "Agent 2: requirements retrieved and candidate scored",
+                                          "Agent 3: privacy, risk, and human-review checks completed",
+                                      ]))
         except UploadValidationError as exc:
-            items.append(PipelineItem(filename=name, status="error", error=str(exc)))
+            items.append(PipelineItem(filename=name, status="error", error=str(exc),
+                                      activity=["Upload validation failed"]))
         except Exception as exc:  # keep the batch going; never log CV content
             logger.error("Pipeline failed for one CV (%s)", type(exc).__name__)
             items.append(PipelineItem(

@@ -92,6 +92,8 @@ class CandidateIntelligenceAgent:
             profile, method = merge_llm_profile(
                 profile, self.llm.extract(redacted_text)
             )
+            if self.llm.last_error:
+                warnings.append(self.llm.last_error)
 
         # 6. confidence + warnings ------------------------------------------------
         confidence = compute_confidence(redacted_text, profile)
