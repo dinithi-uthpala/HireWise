@@ -6,6 +6,13 @@ import os
 import requests
 import streamlit as st
 
+try:
+    from frontend.auth import auth_headers, require_login
+except ModuleNotFoundError:
+    from auth import auth_headers, require_login
+
+require_login()
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -65,6 +72,7 @@ if run_test:
                     f"{API_BASE_URL}/api/pipeline/fairness-test",
                     data=form_data,
                     files=files,
+                    headers=auth_headers(),
                     timeout=120,
                 )
                 if response.status_code in (400, 404):

@@ -77,6 +77,7 @@ python -m pytest tests -q
 ## API endpoints
 
 - `GET /health` - backend readiness check.
+- `POST /api/auth/login` - administrator login; returns a JWT bearer token.
 - `POST /api/agent1/process` and `POST /api/agent1/process-batch` - extract and anonymize CVs.
 - `POST /api/agent2/jobs` - create a persisted job.
 - `GET /api/agent2/jobs/{job_id}/requirements` - extract job requirements.

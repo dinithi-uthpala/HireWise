@@ -7,6 +7,13 @@ import pandas as pd
 import requests
 import streamlit as st
 
+try:
+  from frontend.auth import auth_headers, require_login
+except ModuleNotFoundError:
+  from auth import auth_headers, require_login
+
+require_login()
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -23,7 +30,9 @@ def load_candidates(job_id: str) -> list[dict]:
   with st.spinner("Loading candidates..."):
     try:
       response = requests.get(
-        f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30
+        f"{API_BASE_URL}/api/jobs/{job_id}/candidates",
+        headers=auth_headers(),
+        timeout=30,
       )
     except requests.exceptions.ConnectionError:
       raise ValueError(
@@ -111,7 +120,9 @@ selected_candidate_id = st.selectbox(
 try:
   with st.spinner("Loading candidate details..."):
     detail_response = requests.get(
-      f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
+      f"{API_BASE_URL}/api/candidates/{selected_candidate_id}",
+      headers=auth_headers(),
+      timeout=30,
     )
   if not detail_response.ok:
     st.error(response_detail(detail_response))
@@ -216,6 +227,7 @@ if save_decision:
       decision_response = requests.post(
         f"{API_BASE_URL}/api/candidates/{selected_candidate_id}/decision",
         json={"decision": decision, "note": note},
+        headers=auth_headers(),
         timeout=30,
       )
     if not decision_response.ok:

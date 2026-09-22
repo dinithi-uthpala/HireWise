@@ -7,6 +7,13 @@ import pandas as pd
 import requests
 import streamlit as st
 
+try:
+    from frontend.auth import auth_headers, require_login
+except ModuleNotFoundError:
+    from auth import auth_headers, require_login
+
+require_login()
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.title("Candidate Intelligence")
@@ -39,6 +46,7 @@ if st.button("Process CVs", type="primary", disabled=not uploaded_files):
                 f"{API_BASE_URL}/api/pipeline/run",
                 data={"job_id": job_id},
                 files=payload,
+                headers=auth_headers(),
                 timeout=120,
             )
         except requests.exceptions.ConnectionError:

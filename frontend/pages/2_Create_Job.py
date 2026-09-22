@@ -10,6 +10,19 @@ import os
 import requests
 import streamlit as st
 
+try:
+    from frontend.auth import auth_headers, require_login
+except ModuleNotFoundError:
+    from auth import auth_headers, require_login
+
+st.set_page_config(
+    page_title="HireWise - Create Job",
+    page_icon="💼",
+    layout="wide",
+)
+
+require_login()
+
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -29,17 +42,6 @@ def response_error(response: requests.Response) -> str:
     except ValueError:
         detail = None
     return str(detail or f"HTTP {response.status_code}")
-
-
-# ---------------------------------------------------------------------
-# Page configuration
-# ---------------------------------------------------------------------
-
-st.set_page_config(
-    page_title="HireWise - Create Job",
-    page_icon="💼",
-    layout="wide",
-)
 
 
 # ---------------------------------------------------------------------
@@ -135,6 +137,7 @@ if submitted:
                 response = requests.post(
                     CREATE_JOB_URL,
                     json=payload,
+                    headers=auth_headers(),
                     timeout=30,
                 )
 
@@ -180,6 +183,7 @@ if submitted:
 
                             requirements_response = requests.get(
                                 requirements_url,
+                                headers=auth_headers(),
                                 timeout=30,
                             )
 

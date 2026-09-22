@@ -1,9 +1,13 @@
-"""Page 1 - Login / Dashboard.
+"""Page 1 - Administrator login and dashboard."""
+import streamlit as st
 
-Planned content:
-    - login form (POST /api/auth/login)  -> JWT token stored in session
-    - job vacancy list + create job form
-    - quick stats (jobs, candidates, pending reviews)
-"""
+try:
+    from frontend.auth import show_login, show_logout
+except ModuleNotFoundError:
+    from auth import show_login, show_logout
 
-# TODO(Team): implement login + dashboard widgets here.
+if show_login():
+    show_logout()
+    st.title("Recruiter Dashboard")
+    st.success("Administrator authenticated.")
+    st.warning("Recruiter review required")

@@ -5,13 +5,17 @@ import os
 
 import streamlit as st
 
+try:
+    from frontend.auth import show_login, show_logout
+except ModuleNotFoundError:
+    from auth import show_login, show_logout
+
 st.set_page_config(page_title="HireWise", page_icon="H", layout="wide")
-st.title("HireWise")
-st.caption("AI-assisted recruitment workspace")
-
-st.info("Use **Upload CVs** in the sidebar to run Candidate Intelligence Agent 1.")
-st.session_state.setdefault("agent1_results", [])
-st.metric("Processed candidates", len(st.session_state["agent1_results"]))
-
-if "API_BASE_URL" not in os.environ:
-    st.caption("Backend URL: http://127.0.0.1:8000")
+if show_login():
+    show_logout()
+    st.title("HireWise")
+    st.caption("AI-assisted recruitment workspace")
+    st.info("Use the pages in the sidebar to manage jobs and review candidates.")
+    st.session_state.setdefault("agent1_results", [])
+    st.metric("Processed candidates", len(st.session_state["agent1_results"]))
+    st.caption(f"Backend URL: {os.getenv('API_BASE_URL', 'http://127.0.0.1:8000')}")
