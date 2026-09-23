@@ -30,7 +30,8 @@ try:
         status_data = status_response.json()
         mode = status_data.get("extraction_mode", "deterministic_fallback")
         if mode == "llm_configured":
-            st.success(f"Gemini configured: {status_data.get('llm_provider', 'gemini')} (deterministic fallback remains enabled)")
+            provider = status_data.get("llm_provider", "llm")
+            st.success(f"{provider.title()} configured (deterministic fallback remains enabled)")
         else:
             st.info("Deterministic extraction fallback active; CV processing remains available.")
 except requests.RequestException:
@@ -109,7 +110,7 @@ if st.button(process_label, type="primary", disabled=not uploaded_files):
         ("files", (file.name, file.getvalue(), file.type or "application/octet-stream"))
         for file in uploaded_files
     ]
-    with st.spinner("Agent 1 is extracting and anonymizing candidate profiles..."):
+    with st.spinner("Processing CVs through Agents 1, 2, and 3..."):
         try:
             response = requests.post(
                 f"{API_BASE_URL}/api/pipeline/run",

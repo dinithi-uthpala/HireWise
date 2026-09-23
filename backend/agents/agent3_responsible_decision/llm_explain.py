@@ -89,7 +89,7 @@ def enhance_explanation(review: ReviewOutput, match: MatchResult,
 # ---------------------------------------------------------------------------
 # Real clients (need internet + API key; not exercised by the unit tests)
 # ---------------------------------------------------------------------------
-def _openai_client(base_url: str, api_key: str, model: str) -> LlmCallable:
+def _openai_client(base_url: str, api_key: str, model: str, timeout: float = 20.0) -> LlmCallable:
     def call(prompt: str) -> str | None:
         import httpx
         r = httpx.post(
@@ -98,11 +98,22 @@ def _openai_client(base_url: str, api_key: str, model: str) -> LlmCallable:
             json={"model": model, "temperature": 0.2, "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}]},
-            timeout=20,
+            timeout=timeout,
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     return call
+
+
+def _ollama_client(model: str) -> LlmCallable:
+    """Use Ollama's local OpenAI-compatible endpoint without an API key."""
+    from backend.config import get_settings
+    return _openai_client(
+        "http://localhost:11434/v1",
+        "ollama",
+        model,
+        timeout=get_settings().llm_timeout_seconds,
+    )
 
 
 def _gemini_client(api_key: str, model: str) -> LlmCallable:
@@ -131,4 +142,6 @@ def default_llm_from_settings() -> LlmCallable | None:
         return _openai_client(s.openai_base_url, s.openai_api_key, model or "gpt-4o-mini")
     if provider == "gemini" and s.google_api_key:
         return _gemini_client(s.google_api_key, model or "gemini-2.5-flash")
+    if provider == "ollama":
+        return _ollama_client(model or "llama3.1")
     return None

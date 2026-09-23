@@ -83,6 +83,7 @@ class Settings(BaseSettings):
 
     # optional LLM enhancement (none | gemini | openai | ollama)
     llm_provider: str = "none"
+    llm_timeout_seconds: float = 8.0
     google_api_key: str = ""
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
