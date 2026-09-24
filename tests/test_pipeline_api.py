@@ -91,6 +91,15 @@ def test_result_appears_in_the_job_candidate_list(env):
     assert [r["candidate_id"] for r in rows] == [cid]
 
 
+def test_pipeline_response_and_persisted_result_keep_the_same_job_id(env):
+    item = upload(env).json()[0]
+    candidate = item["candidate"]
+
+    assert candidate["job_id"] == "JOB-1"
+    persisted = env.get(f"/api/candidates/{candidate['candidate_id']}").json()
+    assert persisted["summary"]["job_id"] == "JOB-1"
+
+
 def test_email_and_phone_are_never_stored(env):
     cid = upload(env).json()[0]["candidate"]["candidate_id"]
     stored = json.dumps(env.get(f"/api/candidates/{cid}").json())
