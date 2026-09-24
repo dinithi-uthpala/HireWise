@@ -163,6 +163,25 @@ def test_job_creation_persists_and_returns_job() -> None:
     assert payload["created_at"]
 
 
+def test_job_listing_returns_saved_jobs() -> None:
+    job_id = f"JOB-LIST-{uuid4().hex[:8].upper()}"
+    create_response = client.post(
+        "/api/agent2/jobs",
+        json={
+            "job_id": job_id,
+            "job_title": "Listed Analyst",
+            "job_description": "Required skills: Python.",
+        },
+    )
+    assert create_response.status_code == 201
+
+    response = client.get("/api/agent2/jobs")
+
+    assert response.status_code == 200
+    listed_job = next(job for job in response.json() if job["job_id"] == job_id)
+    assert listed_job["job_title"] == "Listed Analyst"
+
+
 def test_job_creation_rejects_invalid_job_id() -> None:
     response = client.post(
         "/api/agent2/jobs",

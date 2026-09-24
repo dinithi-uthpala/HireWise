@@ -6,6 +6,11 @@ import os
 import requests
 import streamlit as st
 
+try:
+    from frontend.job_selection import render_job_selector
+except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
+    from job_selection import render_job_selector
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -26,8 +31,11 @@ st.caption(
     "samples/cvs/fairness_pair_b_female.docx."
 )
 
+job_id = render_job_selector()
+if not job_id:
+    st.stop()
+
 with st.form("fairness_test_form"):
-    job_id = st.text_input("Job ID", value=st.session_state.get("fairness_job_id", ""))
     file_a = st.file_uploader(
         "CV A",
         type=["pdf", "docx", "txt"],
@@ -48,9 +56,8 @@ with st.form("fairness_test_form"):
     run_test = st.form_submit_button("Run fairness test", type="primary")
 
 if run_test:
-    job_id = job_id.strip()
     if not job_id:
-        st.error("Enter a job ID before running the fairness test.")
+        st.error("Select a saved job before running the fairness test.")
     elif not file_a or not file_b:
         st.error("Upload both CV A and CV B before running the fairness test.")
     else:

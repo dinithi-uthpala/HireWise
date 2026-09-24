@@ -10,6 +10,11 @@ import os
 import requests
 import streamlit as st
 
+try:
+    from frontend.job_selection import open_page, set_selected_job
+except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
+    from job_selection import open_page, set_selected_job
+
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -148,6 +153,7 @@ if submitted:
 
                 # Store created job.
                 st.session_state["created_job"] = created_job
+                set_selected_job(created_job)
 
                 # Store Job ID separately.
                 job_id = created_job.get("job_id")
@@ -322,8 +328,7 @@ if created_job:
         )
 
         st.caption(
-            "Use this Job ID when matching candidates "
-            "against this vacancy."
+            "This job is now selected for CV upload and candidate review."
         )
 
     with col2:
@@ -560,3 +565,6 @@ if st.session_state.get("job_id"):
         f"Current Job ID: "
         f"{st.session_state['job_id']}"
     )
+
+    if st.button("Upload CVs for this job", type="primary"):
+        open_page("pages/3_Upload_CVs.py")

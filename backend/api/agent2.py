@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from backend.agents.agent2_job_matching.agent import match_candidate_to_job
 from backend.agents.agent2_job_matching.requirements import (
@@ -121,6 +121,31 @@ def create_job(
         job_description=job.job_description,
         created_at=job.created_at,
     )
+
+
+# ---------------------------------------------------------------------
+# List Jobs
+# ---------------------------------------------------------------------
+
+@router.get(
+    "/jobs",
+    response_model=list[JobOut],
+)
+def list_jobs(session: Session = Depends(get_session)) -> list[JobOut]:
+    """Return saved vacancies for recruiter job selection."""
+
+    jobs = session.exec(
+        select(JobVacancy).order_by(JobVacancy.created_at.desc())
+    ).all()
+    return [
+        JobOut(
+            job_id=job.job_id,
+            job_title=job.job_title,
+            job_description=job.job_description,
+            created_at=job.created_at,
+        )
+        for job in jobs
+    ]
 
 
 # ---------------------------------------------------------------------
