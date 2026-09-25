@@ -61,7 +61,7 @@ def explanation_is_faithful(original: str, rewritten: str, required_terms: list[
 def enhance_explanation(review: ReviewOutput, match: MatchResult,
                         llm: LlmCallable | None) -> ReviewOutput:
     """Return `review` with an LLM-polished explanation, or unchanged."""
-    if llm is None:
+    if llm is None or not review.privacy_check.passed:
         return review
 
     original = review.explanation

@@ -94,15 +94,14 @@ def test_llm_off_leaves_review_unchanged():
     assert enhance_explanation(review, match, None) is review
 
 
-def test_llm_can_rewrite_sanitized_explanation_when_privacy_check_failed():
+def test_llm_is_never_called_when_privacy_check_failed():
     calls = []
     ext = make_extraction(summary="Reach me at kamal@example.com")
     match = make_match()
     review = review_candidate(ext, match)
     assert not review.privacy_check.passed
-    out = enhance_explanation(review, match, lambda p: calls.append(p) or review.explanation)
-    assert calls and "kamal@example.com" not in calls[0]
-    assert out.explanation_method == "llm_reworded"
+    out = enhance_explanation(review, match, lambda p: calls.append(p) or "x")
+    assert calls == [] and out is review
 
 
 def test_prompt_sent_to_llm_contains_no_personal_data():
