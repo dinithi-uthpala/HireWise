@@ -183,6 +183,8 @@ if st.button("Verify audit log integrity"):
             result = response.json()
             if result.get("valid"):
                 st.success(f"Chain valid - {result.get('entries_checked', 0)} entries checked")
+                st.divider()
+                st.page_link("pages/7_Fairness_Test.py", label="➡️ Run Fairness Test (optional)")
             else:
                 bad_id = result.get("first_bad_entry_id", "unknown")
                 st.error(f"Possible tampering detected at entry {bad_id}")

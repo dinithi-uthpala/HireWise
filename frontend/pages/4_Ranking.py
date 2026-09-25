@@ -178,82 +178,19 @@ review = detail.get("review", {})
 summary = detail.get("summary", {})
 
 st.subheader(f"Review: {selected_candidate_id}")
-left, right = st.columns(2)
 score = match.get("match_score")
 match_available = match.get("match_status") != "unavailable" and score is not None
-left.metric(
-  "Overall score",
-  f"{score:.1f}" if match_available else "Not available",
-)
-right.write("**Recommendation**")
-right.write(summary.get("recommendation", "No recommendation provided."))
 
-confidence_left, confidence_right = st.columns(2)
-confidence_left.metric("Extraction confidence", f"{summary.get('extraction_confidence', 0):.0%}")
-confidence_right.metric("Matching confidence", f"{review.get('matching_confidence', 0):.0%}")
-if not match_available:
-  st.error("No reliable match score was produced. Check the job requirements and CV extraction.")
-elif summary.get("extraction_confidence", 0) < 0.75:
-  st.warning("Low extraction confidence. Review the original CV before relying on this result.")
-if review.get("human_review_required", True):
-  st.info("Recruiter review required. The AI does not make the final hiring decision.")
+score_color = "green" if match_available and score >= 80 else "yellow" if match_available and score >= 60 else "orange" if match_available and score < 60 else "gray"
+score_value = f"{score:.1f}" if match_available else "N/A"
 
-st.markdown("#### Score breakdown")
-breakdown = match.get("score_breakdown", {})
-st.dataframe(
-  pd.DataFrame(
-    [
-      {"Component": name.replace("_", " ").title(), "Score": score}
-      for name, score in breakdown.items()
-    ]
-  ),
-  use_container_width=True,
-  hide_index=True,
-)
-
-matched_skills = match.get("matched_mandatory_skills", []) + match.get(
-  "matched_preferred_skills", []
-)
-missing_skills = [gap.get("skill", "") for gap in match.get("skill_gaps", [])]
-skill_left, skill_right = st.columns(2)
-skill_left.write("**Matched skills**")
-skill_left.write(", ".join(matched_skills) or "None recorded")
-skill_right.write("**Missing skills**")
-skill_right.write(", ".join(missing_skills) or "None recorded")
-
-uncertain_matches = match.get("uncertain_matches", [])
-st.write("**Uncertain matches**")
-if uncertain_matches:
-  st.dataframe(
-    pd.DataFrame(
-      [
-        {
-          "Requirement": item.get("requirement", ""),
-          "Reason": item.get("reason", ""),
-        }
-        for item in uncertain_matches
-      ]
-    ),
-    use_container_width=True,
-    hide_index=True,
-  )
-else:
-  st.write("None recorded")
-
-st.write("**Explanation**")
-method = review.get("explanation_method", "rule_template")
-st.caption("Explanation source: " + ("Gemini LLM rewrite" if method == "llm_reworded" else "Deterministic fallback"))
-st.write(review.get("explanation", "No explanation provided.").split("Points for the recruiter to check:")[0].strip())
-
-st.write("**Recommended recruiter checks**")
-checks = []
-if not match_available:
-  checks.append("Add clear mandatory or preferred requirements to the job description.")
-if summary.get("extraction_confidence", 0) < 0.75:
-  checks.append("Verify the CV text, experience dates, and education manually.")
-checks.extend(flag.get("message", "Review the flagged issue.") for flag in review.get("risk_flags", []))
-for check in dict.fromkeys(checks):
-  st.warning(check)
+left, right = st.columns(2)
+with left:
+  st.markdown("**Overall score**")
+  st.badge(score_value, color=score_color)
+with right:
+  st.markdown("**Recommendation**")
+  st.write(summary.get("recommendation", "No recommendation provided."))
 
 privacy = review.get("privacy_check", {})
 st.write("**Privacy check**")
@@ -263,14 +200,82 @@ else:
   st.error("Privacy check requires attention")
   st.write(", ".join(privacy.get("violations", [])) or "No violation details provided.")
 
-risk_flags = review.get("risk_flags", [])
-st.write("**Risk flags**")
-if risk_flags:
-  for flag in risk_flags:
-    st.warning(f"{flag.get('code', 'Risk flag')}: {flag.get('message', '')}")
-else:
-  st.write("None recorded")
+if not match_available:
+  st.error("No reliable match score was produced. Check the job requirements and CV extraction.")
+if review.get("human_review_required", True):
+  st.info("Recruiter review required. The AI does not make the final hiring decision.")
 
+breakdown = match.get("score_breakdown", {})
+if breakdown:
+  with st.expander("Score breakdown", expanded=False):
+    st.dataframe(
+      pd.DataFrame(
+        [
+          {"Component": name.replace("_", " ").title(), "Score": score}
+          for name, score in breakdown.items()
+        ]
+      ),
+      use_container_width=True,
+      hide_index=True,
+    )
+
+matched_skills = match.get("matched_mandatory_skills", []) + match.get("matched_preferred_skills", [])
+missing_skills = [gap.get("skill", "") for gap in match.get("skill_gaps", []) if gap.get("skill")]
+if matched_skills or missing_skills:
+  with st.expander("Matched / missing skills", expanded=False):
+    cols = st.columns(2)
+    if matched_skills:
+      with cols[0]:
+        st.write("**Matched skills**")
+        st.write(", ".join(matched_skills))
+    if missing_skills:
+      with cols[1]:
+        st.write("**Missing skills**")
+        st.write(", ".join(missing_skills))
+
+uncertain_matches = match.get("uncertain_matches", [])
+if uncertain_matches:
+  with st.expander("Uncertain matches", expanded=False):
+    st.dataframe(
+      pd.DataFrame(
+        [
+          {
+            "Requirement": item.get("requirement", ""),
+            "Reason": item.get("reason", ""),
+          }
+          for item in uncertain_matches
+        ]
+      ),
+      use_container_width=True,
+      hide_index=True,
+    )
+
+explanation = review.get("explanation", "")
+if explanation:
+  with st.expander("Explanation", expanded=False):
+    method = review.get("explanation_method", "rule_template")
+    st.caption("Explanation source: " + ("Gemini LLM rewrite" if method == "llm_reworded" else "Deterministic fallback"))
+    st.write(explanation.strip())
+
+risk_flags = review.get("risk_flags", [])
+if risk_flags:
+  with st.expander("Risk flags", expanded=False):
+    cols = st.columns(min(len(risk_flags), 3))
+    for index, flag in enumerate(risk_flags):
+      code = flag.get("code", "RISK_FLAG")
+      severity = str(flag.get("severity", "warning")).lower()
+      if severity in {"critical", "high"}:
+        color = "red"
+      elif severity in {"medium", "warning", "moderate"}:
+        color = "orange"
+      elif severity in {"low", "info"}:
+        color = "yellow"
+      else:
+        color = "gray"
+      with cols[index % min(len(risk_flags), 3)]:
+        st.badge(code, color=color)
+
+st.divider()
 st.markdown("#### Human decision")
 with st.form("human_decision_form"):
   decision = st.radio(
@@ -304,6 +309,8 @@ if save_decision:
       st.session_state["saved_decision"] = (
         f"Human decision saved: {decision.replace('_', ' ').title()}."
       )
-      st.rerun()
+      st.success(st.session_state["saved_decision"])
+      st.divider()
+      st.page_link("pages/5_Candidate_Detail.py", label="➡️ View Candidate Detail")
   except (requests.RequestException, ValueError) as exc:
     show_request_error(exc)

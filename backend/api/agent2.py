@@ -86,13 +86,8 @@ router = APIRouter(
 @router.get("/jobs", response_model=list[JobOut])
 def list_jobs(session: Session = Depends(get_session)) -> list[JobOut]:
     """Return the curated built-in job library for recruiter selection."""
-    jobs_by_id = {
-        job.job_id: job
-        for job in session.exec(select(JobVacancy)).all()
-        if job.job_id in {item.job_id for item in CATALOG_JOBS}
-    }
-    unique_jobs = [jobs_by_id[item.job_id] for item in CATALOG_JOBS if item.job_id in jobs_by_id]
-    unique_jobs.sort(key=lambda job: job.job_title.lower())
+    all_jobs = list(session.exec(select(JobVacancy)).all())
+    all_jobs.sort(key=lambda job: job.job_title.lower())
     return [
         JobOut(
             job_id=job.job_id,
@@ -100,7 +95,7 @@ def list_jobs(session: Session = Depends(get_session)) -> list[JobOut]:
             job_description=job.job_description,
             created_at=job.created_at,
         )
-        for job in unique_jobs
+        for job in all_jobs
     ]
 
 

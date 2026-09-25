@@ -182,3 +182,7 @@ if results:
                 confidence = candidate.get("extraction_confidence", 0.0)
                 if confidence < 0.75 or candidate.get("status") == "awaiting_human_review":
                     st.warning("Manual review required before any recruiter decision.")
+
+    if all(result.get("status") == "processed" for result in results):
+        st.divider()
+        st.page_link("pages/4_Ranking.py", label="➡️ View Ranking")

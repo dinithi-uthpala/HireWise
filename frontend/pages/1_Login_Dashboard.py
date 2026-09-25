@@ -11,3 +11,5 @@ if show_login():
     st.title("Recruiter Dashboard")
     st.success("Administrator authenticated.")
     st.warning("Recruiter review required")
+    st.divider()
+    st.page_link("pages/2_Create_Job.py", label="➡️ Continue to Create Job")

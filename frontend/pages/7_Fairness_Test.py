@@ -118,3 +118,5 @@ if result:
     )
     st.write("**Explanation**")
     st.write(result.get("explanation", "No explanation provided."))
+    st.divider()
+    st.page_link("pages/1_Login_Dashboard.py", label="➡️ Back to Login Dashboard")
