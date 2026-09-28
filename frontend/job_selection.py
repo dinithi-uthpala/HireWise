@@ -7,6 +7,11 @@ from typing import Any
 import requests
 import streamlit as st
 
+try:
+    from frontend.auth import auth_headers
+except ModuleNotFoundError:
+    from auth import auth_headers
+
 
 API_BASE_URL = os.getenv(
     "HIREWISE_API_URL", os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
@@ -43,7 +48,11 @@ def selected_job_id() -> str:
 def load_saved_jobs() -> list[dict[str, Any]]:
     """Load saved Agent 2 vacancies without raising UI-breaking exceptions."""
 
-    response = requests.get(f"{API_BASE_URL}/api/agent2/jobs", timeout=30)
+    response = requests.get(
+        f"{API_BASE_URL}/api/agent2/jobs",
+        headers=auth_headers(),
+        timeout=30,
+    )
     response.raise_for_status()
     return response.json()
 

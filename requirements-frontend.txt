@@ -10,3 +10,4 @@ pandas>=2.2.0                    # tables + ranking
 plotly>=5.22.0                   # score-breakdown / gap charts
 python-dotenv>=1.0.1             # read .env for API base URL
 pillow>=10.0.0                   # image handling (screenshots, logos)
+reportlab>=4.0.0                # candidate and audit PDF exports

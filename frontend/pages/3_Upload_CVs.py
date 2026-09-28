@@ -8,11 +8,15 @@ import requests
 import streamlit as st
 
 try:
+    from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
+    from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+require_login()
 
 
 def response_detail(response: requests.Response) -> str:
@@ -25,7 +29,7 @@ def response_detail(response: requests.Response) -> str:
 def load_processed_candidates(job_id: str) -> list[dict]:
     """Read persisted pipeline results for one job from the existing API."""
 
-    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30)
+    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", headers=auth_headers(), timeout=30)
     if not response.ok:
         raise ValueError(response_detail(response))
     return response.json()
@@ -70,6 +74,7 @@ if st.button("Process CVs", type="primary", disabled=not uploaded_files):
                 f"{API_BASE_URL}/api/pipeline/run",
                 data={"job_id": job_id},
                 files=payload,
+                headers=auth_headers(),
                 timeout=120,
             )
         except requests.exceptions.ConnectionError:

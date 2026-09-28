@@ -309,4 +309,5 @@ class ReviewOutput(BaseModel):
     privacy_check: PrivacyCheck
     # The AI never decides. Pydantic rejects anything except True.
     human_review_required: Literal[True] = True
+    explanation_method: Literal["rule_template", "llm_reworded", "llm_fallback"] = "rule_template"
     reviewed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

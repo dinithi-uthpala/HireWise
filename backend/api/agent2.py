@@ -14,6 +14,7 @@ from backend.agents.agent2_job_matching.requirements import (
     extract_job_requirements,
 )
 from backend.database import get_session
+from backend.job_catalog import CATALOG_JOBS
 from backend.models import JobVacancy
 from backend.schemas import (
     CandidateProfile,
@@ -80,6 +81,22 @@ router = APIRouter(
     prefix="/agent2",
     tags=["Agent 2 - Job Matching"],
 )
+
+
+@router.get("/jobs", response_model=list[JobOut])
+def list_jobs(session: Session = Depends(get_session)) -> list[JobOut]:
+    """Return the curated built-in job library for recruiter selection."""
+    all_jobs = list(session.exec(select(JobVacancy)).all())
+    all_jobs.sort(key=lambda job: job.job_title.lower())
+    return [
+        JobOut(
+            job_id=job.job_id,
+            job_title=job.job_title,
+            job_description=job.job_description,
+            created_at=job.created_at,
+        )
+        for job in all_jobs
+    ]
 
 
 # ---------------------------------------------------------------------

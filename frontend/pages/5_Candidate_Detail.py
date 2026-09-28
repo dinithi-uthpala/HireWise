@@ -8,11 +8,15 @@ import requests
 import streamlit as st
 
 try:
+    from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
+    from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+require_login()
 
 
 def response_detail(response: requests.Response) -> str:
@@ -40,13 +44,13 @@ def show_backend_error(exc: requests.RequestException) -> None:
 def load_candidates_with_retry(job_id: str) -> list[dict]:
     """Retry once while a just-finished pipeline result becomes visible."""
 
-    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30)
+    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", headers=auth_headers(), timeout=30)
     if not response.ok:
         raise ValueError(response_detail(response))
     candidates = response.json()
     if not candidates:
         time.sleep(0.25)
-        response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30)
+        response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", headers=auth_headers(), timeout=30)
         if not response.ok:
             raise ValueError(response_detail(response))
         candidates = response.json()
@@ -69,7 +73,9 @@ if (
     try:
         with st.spinner("Loading selected candidate..."):
             response = requests.get(
-                f"{API_BASE_URL}/api/candidates/{selected_from_ranking}", timeout=30
+                f"{API_BASE_URL}/api/candidates/{selected_from_ranking}",
+                headers=auth_headers(),
+                timeout=30,
             )
         if response.ok:
             st.session_state["detail_data"] = response.json()
@@ -135,7 +141,9 @@ if (
     try:
         with st.spinner("Loading candidate details..."):
             response = requests.get(
-                f"{API_BASE_URL}/api/candidates/{selected_candidate_id}", timeout=30
+                f"{API_BASE_URL}/api/candidates/{selected_candidate_id}",
+                headers=auth_headers(),
+                timeout=30,
             )
         if not response.ok:
             st.error(response_detail(response))
@@ -252,6 +260,7 @@ if save_decision:
             response = requests.post(
                 f"{API_BASE_URL}/api/candidates/{selected_candidate_id}/decision",
                 json={"decision": decision, "note": note},
+                headers=auth_headers(),
                 timeout=30,
             )
         if not response.ok:

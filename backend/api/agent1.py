@@ -4,6 +4,8 @@ from __future__ import annotations
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from backend.agents.agent1_candidate_intelligence import process_cv
+from backend.agents.agent1_candidate_intelligence.llm import LLMEnhancer
+from backend.config import get_settings
 from backend.security.files import UploadValidationError
 from backend.schemas import ExtractionResult
 
@@ -53,4 +55,10 @@ async def process_candidate_batch(
 @router.get("/status", tags=["Agent 1 - Candidate Intelligence"])
 def agent1_status() -> dict[str, str]:
     """Describe the Agent 1 service for the activity monitor."""
-    return {"agent": "candidate_intelligence", "status": "ready"}
+    enhancer = LLMEnhancer(get_settings())
+    return {
+        "agent": "candidate_intelligence",
+        "status": "ready",
+        "llm_provider": enhancer.provider,
+        "extraction_mode": "llm_configured" if enhancer.available() else "deterministic_fallback",
+    }

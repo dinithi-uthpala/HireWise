@@ -8,11 +8,15 @@ import requests
 import streamlit as st
 
 try:
+    from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
+    from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+require_login()
 
 
 def response_detail(response: requests.Response) -> str:
@@ -23,7 +27,7 @@ def response_detail(response: requests.Response) -> str:
 
 
 def load_candidates(job_id: str) -> list[dict]:
-    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", timeout=30)
+    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", headers=auth_headers(), timeout=30)
     if not response.ok:
         raise ValueError(response_detail(response))
     return response.json()
@@ -72,7 +76,7 @@ else:
     if selected_candidate_id != st.session_state.get("audit_loaded_candidate_id"):
         try:
             with st.spinner("Loading audit log..."):
-                response = requests.get(f"{API_BASE_URL}/api/audit/{selected_candidate_id}", timeout=30)
+                response = requests.get(f"{API_BASE_URL}/api/audit/{selected_candidate_id}", headers=auth_headers(), timeout=30)
             if not response.ok:
                 st.error(response_detail(response))
                 st.session_state["audit_events"] = []
@@ -107,7 +111,7 @@ if st.button("Run/View Fairness Test"):
 if st.button("Verify audit log integrity"):
     try:
         with st.spinner("Verifying audit log integrity..."):
-            response = requests.get(f"{API_BASE_URL}/api/audit-chain/verify", timeout=30)
+            response = requests.get(f"{API_BASE_URL}/api/audit-chain/verify", headers=auth_headers(), timeout=30)
         if not response.ok:
             st.error(response_detail(response))
         else:

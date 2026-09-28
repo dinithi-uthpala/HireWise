@@ -77,6 +77,7 @@ python -m pytest tests -q
 ## API endpoints
 
 - `GET /health` - backend readiness check.
+- `POST /api/auth/login` - administrator login; returns a JWT bearer token.
 - `POST /api/agent1/process` and `POST /api/agent1/process-batch` - extract and anonymize CVs.
 - `POST /api/agent2/jobs` - create a persisted job.
 - `GET /api/agent2/jobs/{job_id}/requirements` - extract job requirements.
@@ -88,6 +89,15 @@ python -m pytest tests -q
 - `POST /api/candidates/{candidate_id}/decision` - save a human decision.
 - `GET /api/audit/{candidate_id}` - read a candidate audit trail.
 - `GET /api/audit-chain/verify` - verify the audit hash chain.
+
+The dashboard also provides candidate comparison, CSV exports, candidate
+explanation PDFs, audit CSV/PDF exports, agent activity milestones, Gemini
+configuration status, deterministic fallback, and manual-review alerts.
+
+Recommendation codes are produced by deterministic Responsible-AI rules from
+the score, evidence, confidence, and risk flags. Gemini may rewrite the
+explanation for readability, but it cannot make the hiring decision or change
+the recommendation facts; the recruiter makes the final decision.
 
 ## Responsible AI features
 

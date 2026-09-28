@@ -3,9 +3,9 @@
 The deterministic explanation (explain.py) is ALWAYS built first, from fixed
 rules. An LLM may only re-word it for readability. Safeguards:
   - OFF unless LLM_PROVIDER is openai or gemini AND an API key is set
-  - never called when the privacy check failed (no data leaves the system)
-  - the prompt contains only the rule-based explanation text (anonymous:
+    - receives only the rule-based explanation text (anonymous:
     candidate ID, scores, skill names) and treats it as DATA, not instructions
+    - never receives raw CV text or detected PII, even when the privacy check failed
   - the reply is rejected (and the original text kept) if it drops or changes
     any number, skill, label or the human-decision sentence, or adds personal
     data, prohibited attributes or the word "rejected"
@@ -70,7 +70,7 @@ def enhance_explanation(review: ReviewOutput, match: MatchResult,
         text = llm(prompt)
     except Exception as exc:  # network, quota, bad key ... never fatal
         logger.error("LLM explanation failed (%s); keeping rule-based text", type(exc).__name__)
-        return review
+        return review.model_copy(update={"explanation_method": "llm_fallback"})
 
     terms = [review.candidate_id, review.recommendation]
     terms += match.matched_mandatory_skills + match.matched_preferred_skills
@@ -79,14 +79,17 @@ def enhance_explanation(review: ReviewOutput, match: MatchResult,
 
     if text is None or not explanation_is_faithful(original, text, terms):
         logger.info("LLM rewrite rejected by the faithfulness check; keeping rule-based text")
-        return review
-    return review.model_copy(update={"explanation": text.strip() + "\n\n" + LLM_NOTE})
+        return review.model_copy(update={"explanation_method": "llm_fallback"})
+    return review.model_copy(update={
+        "explanation": text.strip() + "\n\n" + LLM_NOTE,
+        "explanation_method": "llm_reworded",
+    })
 
 
 # ---------------------------------------------------------------------------
 # Real clients (need internet + API key; not exercised by the unit tests)
 # ---------------------------------------------------------------------------
-def _openai_client(base_url: str, api_key: str, model: str) -> LlmCallable:
+def _openai_client(base_url: str, api_key: str, model: str, timeout: float = 20.0) -> LlmCallable:
     def call(prompt: str) -> str | None:
         import httpx
         r = httpx.post(
@@ -95,11 +98,22 @@ def _openai_client(base_url: str, api_key: str, model: str) -> LlmCallable:
             json={"model": model, "temperature": 0.2, "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}]},
-            timeout=20,
+            timeout=timeout,
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     return call
+
+
+def _ollama_client(model: str) -> LlmCallable:
+    """Use Ollama's local OpenAI-compatible endpoint without an API key."""
+    from backend.config import get_settings
+    return _openai_client(
+        "http://localhost:11434/v1",
+        "ollama",
+        model,
+        timeout=get_settings().llm_timeout_seconds,
+    )
 
 
 def _gemini_client(api_key: str, model: str) -> LlmCallable:
@@ -128,4 +142,6 @@ def default_llm_from_settings() -> LlmCallable | None:
         return _openai_client(s.openai_base_url, s.openai_api_key, model or "gpt-4o-mini")
     if provider == "gemini" and s.google_api_key:
         return _gemini_client(s.google_api_key, model or "gemini-2.5-flash")
+    if provider == "ollama":
+        return _ollama_client(model or "llama3.1")
     return None
