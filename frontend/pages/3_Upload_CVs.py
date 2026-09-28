@@ -9,108 +9,66 @@ import streamlit as st
 
 try:
     from frontend.auth import auth_headers, require_login
-except ModuleNotFoundError:
+    from frontend.job_selection import open_page, render_job_selector
+except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
     from auth import auth_headers, require_login
+    from job_selection import open_page, render_job_selector
+
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 require_login()
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+def response_detail(response: requests.Response) -> str:
+    try:
+        return str(response.json().get("detail") or f"HTTP {response.status_code}")
+    except ValueError:
+        return f"HTTP {response.status_code}"
+
+
+def load_processed_candidates(job_id: str) -> list[dict]:
+    """Read persisted pipeline results for one job from the existing API."""
+
+    response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}/candidates", headers=auth_headers(), timeout=30)
+    if not response.ok:
+        raise ValueError(response_detail(response))
+    return response.json()
 
 st.title("Candidate Intelligence")
 st.caption("Upload CVs to extract an anonymous, job-relevant profile.")
 st.warning("Recruiter review required")
 
-try:
-    status_response = requests.get(
-        f"{API_BASE_URL}/api/agent1/status",
-        headers=auth_headers(),
-        timeout=10,
-    )
-    if status_response.ok:
-        status_data = status_response.json()
-        mode = status_data.get("extraction_mode", "deterministic_fallback")
-        if mode == "llm_configured":
-            provider = status_data.get("llm_provider", "llm")
-            st.success(f"{provider.title()} configured (deterministic fallback remains enabled)")
-        else:
-            st.info("Deterministic extraction fallback active; CV processing remains available.")
-except requests.RequestException:
-    st.warning("Agent status is unavailable; processing may still continue.")
+job_id = render_job_selector()
 
-jobs: list[dict] = []
-try:
-    jobs_response = requests.get(
-        f"{API_BASE_URL}/api/agent2/jobs",
-        headers=auth_headers(),
-        timeout=15,
-    )
-    if jobs_response.ok:
-        jobs = jobs_response.json()
-    else:
-        st.error("The saved job library could not be loaded.")
-except requests.RequestException:
-    st.error("Backend is not running. Start FastAPI before selecting a job.")
-
-if not jobs:
-    st.stop()
-
-job_options = {job["job_title"]: job for job in jobs}
-selected_title = st.selectbox(
-    "Select a job role",
-    list(job_options),
-    index=(
-        list(job_options).index(st.session_state["upload_job_title"])
-        if st.session_state.get("upload_job_title") in job_options
-        else 0
-    ),
-)
-selected_job = job_options[selected_title]
-job_id = selected_job["job_id"]
-st.session_state["upload_job_id"] = job_id
-st.session_state["upload_job_title"] = selected_title
-with st.expander("View selected job description", expanded=True):
-    st.write(selected_job["job_description"])
-
-upload_mode = st.radio(
-    "Candidate upload mode",
-    ["Single candidate", "Multiple candidates"],
-    horizontal=True,
-    help="Use Multiple candidates to upload and process a batch of CVs for the same job.",
-)
-multiple_candidates = upload_mode == "Multiple candidates"
+if job_id:
+    try:
+        persisted_candidates = load_processed_candidates(job_id)
+        st.session_state.setdefault("upload_candidates_by_job", {})[job_id] = persisted_candidates
+    except (requests.RequestException, ValueError) as exc:
+        persisted_candidates = st.session_state.get("upload_candidates_by_job", {}).get(job_id, [])
+        st.error(f"Unable to load processed candidates: {exc}")
+else:
+    persisted_candidates = []
 
 files = st.file_uploader(
-    "Choose candidate CV files",
+    "Choose CV files",
     type=["pdf", "docx", "txt", "md"],
-    accept_multiple_files=multiple_candidates,
+    accept_multiple_files=True,
     help="Files are validated, PII-redacted, parsed, and encrypted by Agent 1.",
 )
 
-if multiple_candidates:
-    uploaded_files = list(files or [])
-else:
-    uploaded_files = [files] if files is not None else []
+uploaded_files = files or []
 
-if multiple_candidates:
-    st.caption("Batch mode: all selected CVs will be matched against the same Job ID.")
-if uploaded_files:
-    st.success(f"{len(uploaded_files)} candidate CV(s) selected")
-    st.dataframe(
-        pd.DataFrame(
-            [{"File": file.name, "Size (KB)": round(len(file.getvalue()) / 1024, 1)} for file in uploaded_files]
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-process_label = "Process candidate batch" if multiple_candidates else "Process candidate CV"
-if st.button(process_label, type="primary", disabled=not uploaded_files):
+if st.button("Process CVs", type="primary", disabled=not uploaded_files):
     job_id = job_id.strip()
+    if not job_id:
+        st.error("Select a saved job before processing CVs.")
+        st.stop()
     payload = [
         ("files", (file.name, file.getvalue(), file.type or "application/octet-stream"))
         for file in uploaded_files
     ]
-    with st.spinner("Processing CVs through Agents 1, 2, and 3..."):
+    with st.spinner("Agent 1 is extracting and anonymizing candidate profiles..."):
         try:
             response = requests.post(
                 f"{API_BASE_URL}/api/pipeline/run",
@@ -130,7 +88,22 @@ if st.button(process_label, type="primary", disabled=not uploaded_files):
             if response.ok:
                 results = response.json()
                 st.session_state["upload_job_id"] = job_id
+                st.session_state["job_id"] = job_id
                 st.session_state["pipeline_results"] = results
+                st.session_state.setdefault("pipeline_results_by_job", {})[job_id] = results
+                try:
+                    persisted_candidates = load_processed_candidates(job_id)
+                    st.session_state.setdefault("upload_candidates_by_job", {})[job_id] = persisted_candidates
+                    # Replace any stale empty Ranking cache for this same job.
+                    st.session_state["results_job_id"] = job_id
+                    st.session_state["candidate_results"] = persisted_candidates
+                except (requests.RequestException, ValueError) as exc:
+                    st.warning(f"CVs were processed, but results could not be reloaded: {exc}")
+                processed_candidates = [
+                    item.get("candidate") for item in results if item.get("candidate")
+                ]
+                if processed_candidates:
+                    st.session_state["selected_candidate_id"] = processed_candidates[0]["candidate_id"]
                 st.success(f"Processed {len(results)} candidate(s).")
             else:
                 try:
@@ -142,7 +115,13 @@ if st.button(process_label, type="primary", disabled=not uploaded_files):
                     f"{detail or f'HTTP {response.status_code}'}"
                 )
 
-results = st.session_state.get("pipeline_results", [])
+results = st.session_state.get("pipeline_results_by_job", {}).get(job_id, [])
+if not results and persisted_candidates:
+    # Filenames are deliberately not persisted because they can contain PII.
+    results = [
+        {"filename": "Previously processed candidate", "status": "processed", "candidate": candidate}
+        for candidate in persisted_candidates
+    ]
 if results:
     st.subheader("Agent activity")
     rows = []
@@ -174,15 +153,6 @@ if results:
                     column.error(f"Failed\n\n{step}")
             if not succeeded and result.get("error"):
                 st.error(result["error"])
-            if result.get("activity"):
-                st.write("**Agent activity**")
-                for step in result["activity"]:
-                    st.success(step)
-            if succeeded and candidate.get("match_score") is not None:
-                confidence = candidate.get("extraction_confidence", 0.0)
-                if confidence < 0.75 or candidate.get("status") == "awaiting_human_review":
-                    st.warning("Manual review required before any recruiter decision.")
 
-    if all(result.get("status") == "processed" for result in results):
-        st.divider()
-        st.page_link("pages/4_Ranking.py", label="➡️ View Ranking")
+    if st.button("View ranking for this job", type="primary"):
+        open_page("pages/4_Ranking.py")

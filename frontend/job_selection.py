@@ -1,46 +1,91 @@
-"""Shared saved-job selector for recruiter-facing Streamlit pages."""
+"""Shared saved-job selection helpers for Streamlit workflow pages."""
 from __future__ import annotations
+
+import os
+from typing import Any
 
 import requests
 import streamlit as st
 
+try:
+    from frontend.auth import auth_headers
+except ModuleNotFoundError:
+    from auth import auth_headers
 
-def load_saved_jobs(api_base_url: str, headers: dict[str, str]) -> list[dict]:
-    """Load only the curated roles exposed by the backend catalogue."""
+
+API_BASE_URL = os.getenv(
+    "HIREWISE_API_URL", os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+).rstrip("/")
+
+
+def set_selected_job(job: dict[str, Any]) -> None:
+    """Store one normalized saved job under the workflow-wide session keys."""
+
+    job_id = str(job.get("job_id", "")).strip()
+    if not job_id:
+        return
+    selected_job = {
+        "job_id": job_id,
+        "job_title": str(job.get("job_title") or job.get("title") or "Untitled job"),
+        "job_description": str(job.get("job_description", "")),
+    }
+    st.session_state["selected_job"] = selected_job
+    st.session_state["job_id"] = job_id
+
+
+def selected_job_id() -> str:
+    """Return the selected job ID, keeping legacy session keys in sync."""
+
+    selected_job = st.session_state.get("selected_job") or {}
+    job_id = str(selected_job.get("job_id") or st.session_state.get("job_id") or "")
+    if job_id and not selected_job:
+        st.session_state["selected_job"] = {"job_id": job_id, "job_title": "Selected job"}
+    if job_id:
+        st.session_state["job_id"] = job_id
+    return job_id
+
+
+def load_saved_jobs() -> list[dict[str, Any]]:
+    """Load saved Agent 2 vacancies without raising UI-breaking exceptions."""
+
     response = requests.get(
-        f"{api_base_url}/api/agent2/jobs",
-        headers=headers,
-        timeout=15,
+        f"{API_BASE_URL}/api/agent2/jobs",
+        headers=auth_headers(),
+        timeout=30,
     )
     response.raise_for_status()
     return response.json()
 
 
-def select_saved_job(
-    api_base_url: str,
-    headers: dict[str, str],
-    state_key: str,
-    label: str = "Select a job role",
-) -> dict | None:
-    """Render a role dropdown and return the selected saved job."""
+def render_job_selector() -> str:
+    """Render the shared saved-job selector and return its selected ID."""
+
     try:
-        jobs = load_saved_jobs(api_base_url, headers)
+        jobs = load_saved_jobs()
     except requests.RequestException as exc:
-        st.error(f"Could not load saved job roles: {exc}")
-        return None
+        st.warning(f"Could not load saved jobs: {exc}")
+        return selected_job_id()
 
     if not jobs:
-        st.error("No saved job roles are available.")
-        return None
+        st.info("No saved jobs yet. Create a job before uploading or reviewing CVs.")
+        return ""
 
-    jobs_by_title = {job["job_title"]: job for job in jobs}
-    titles = list(jobs_by_title)
-    previous = st.session_state.get(state_key)
-    index = titles.index(previous) if previous in titles else 0
-    selected_title = st.selectbox(label, titles, index=index, key=f"{state_key}_select")
-    selected_job = jobs_by_title[selected_title]
-    st.session_state[state_key] = selected_title
+    job_by_id = {job["job_id"]: job for job in jobs}
+    job_ids = list(job_by_id)
+    current_id = selected_job_id()
+    index = job_ids.index(current_id) if current_id in job_by_id else 0
+    job_id = st.selectbox(
+        "Saved job",
+        job_ids,
+        index=index,
+        format_func=lambda item: f"{job_by_id[item].get('job_title', 'Untitled job')} ({item})",
+        key="selected_job_picker",
+    )
+    set_selected_job(job_by_id[job_id])
+    return job_id
 
-    with st.expander("View selected job description", expanded=False):
-        st.write(selected_job["job_description"])
-    return selected_job
+
+def open_page(page: str) -> None:
+    """Navigate within the Streamlit multipage app when the API is available."""
+
+    st.switch_page(page)
