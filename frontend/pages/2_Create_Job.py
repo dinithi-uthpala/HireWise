@@ -92,8 +92,8 @@ if submitted:
     else:
 
         payload = {
-            "title": job_title.strip(),
-            "description": job_description.strip(),
+            "job_title": job_title.strip(),
+            "job_description": job_description.strip(),
         }
 
         with st.spinner("Creating job and analyzing requirements..."):
