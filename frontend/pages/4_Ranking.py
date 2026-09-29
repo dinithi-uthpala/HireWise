@@ -11,13 +11,16 @@ import streamlit as st
 try:
     from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
+    from frontend.ui import page_header, selected_job_card
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
     from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
+    from ui import page_header, selected_job_card
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 require_login()
+page_header("Candidate ranking", "Review transparent AI matching results before making a human decision.", ":material/leaderboard:")
 
 
 def response_detail(response: requests.Response) -> str:
@@ -44,13 +47,12 @@ def load_candidates_with_retry(job_id: str) -> list[dict]:
     return candidates
 
 
-st.title("Candidate Results")
-st.caption("Review transparent AI matching results before making a human decision.")
-st.warning("Recruiter review required")
+st.caption("Scores are returned by Agent 2; human review remains required before a decision.")
 
 job_id = render_job_selector()
 if not job_id:
     st.stop()
+selected_job_card()
 
 if job_id != st.session_state.get("results_job_id") or not st.session_state.get("candidate_results"):
     try:
@@ -77,7 +79,7 @@ if not candidates:
     # (including tooling that imports page modules) safe as well.
     candidates = [{"candidate_id": "", "match_score": None}]
 
-st.subheader("Ranked candidates")
+st.subheader("Ranked candidates", icon=":material/leaderboard:")
 st.dataframe(
     pd.DataFrame(
         {

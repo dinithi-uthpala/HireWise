@@ -1,91 +1,27 @@
-"""Page 1 - Administrator login and recruiter dashboard."""
-
+"""Recruiter dashboard."""
 import streamlit as st
-
 try:
-    from frontend.auth import show_login, show_logout
+    from frontend.auth import require_login
+    from frontend.ui import page_header
 except ModuleNotFoundError:
-    from auth import show_login, show_logout
+    from auth import require_login
+    from ui import page_header
 
-
-# ---------------------------------------------------------------------
-# Administrator login
-# ---------------------------------------------------------------------
-
-if show_login():
-
-    show_logout()
-
-    st.title("Recruiter Dashboard")
-
-    st.success("Administrator authenticated.")
-
-    st.warning("Recruiter review required")
-
-    st.divider()
-
-    st.subheader("What would you like to do?")
-
-    st.write(
-        "Start a new recruitment process or continue with an existing "
-        "saved job."
-    )
-
-    st.write("")
-
-    # -----------------------------------------------------------------
-    # Main actions
-    # -----------------------------------------------------------------
-
-    col1, col2 = st.columns(2)
-
-    # ================================================================
-    # CREATE NEW JOB
-    # ================================================================
-
-    with col1:
-
-        st.markdown("### ➕ Create New Job")
-
-        st.write(
-            "Create a new vacancy and let HireWise analyze its "
-            "requirements for candidate matching."
-        )
-
-        if st.button(
-            "Create New Job →",
-            type="primary",
-            use_container_width=True,
-            key="create_new_job",
-        ):
-
+require_login()
+name = st.session_state.get("admin_username", "Administrator").replace("_", " ").title()
+page_header(f"Welcome, {name} 👋", "Manage recruitment processes with the help of AI agents.", ":material/waving_hand:")
+st.markdown("""<div class='hw-hero'><h2>Recruiter dashboard</h2><p>Start a new recruitment process or continue with an existing saved job.</p></div>""", unsafe_allow_html=True)
+create, existing = st.columns(2)
+with create:
+    with st.container(border=True):
+        st.header("Create new job", icon=":material/note_add:")
+        st.write("Create a new vacancy and let HireWise analyze its requirements for candidate matching.")
+        if st.button("Create new job", type="primary", width="stretch", icon=":material/arrow_forward:"):
             st.switch_page("pages/2_Create_Job.py")
-
-    # ================================================================
-    # EXISTING JOB
-    # ================================================================
-
-    with col2:
-
-        st.markdown("### 📂 Use Existing Job")
-
-        st.write(
-            "Continue recruitment for a previously created vacancy "
-            "without creating another job."
-        )
-
-        if st.button(
-            "Use Existing Job →",
-            use_container_width=True,
-            key="use_existing_job",
-        ):
-
+with existing:
+    with st.container(border=True):
+        st.header("Use existing job", icon=":material/folder_open:")
+        st.write("Continue recruitment for a previously created vacancy without creating another job.")
+        if st.button("Use existing job", width="stretch", icon=":material/arrow_forward:"):
             st.switch_page("pages/2_Existing_Job.py")
-
-    st.divider()
-
-    st.info(
-        "💡 **Tip:** Create a new job when opening a new vacancy. "
-        "Use an existing job when you already have a saved vacancy "
-        "and want to continue uploading or reviewing CVs."
-    )
+st.info("Create a new job for a new vacancy. Use an existing job to continue uploading or reviewing CVs.", icon=":material/lightbulb:")

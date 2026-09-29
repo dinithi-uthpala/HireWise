@@ -10,13 +10,16 @@ import streamlit as st
 try:
     from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
+    from frontend.ui import page_header, selected_job_card
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
     from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
+    from ui import page_header, selected_job_card
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 require_login()
+page_header("Upload CVs", "Upload candidate CVs for the selected job and let HireWise process them securely.", ":material/upload_file:")
 
 
 def response_detail(response: requests.Response) -> str:
@@ -34,13 +37,12 @@ def load_processed_candidates(job_id: str) -> list[dict]:
         raise ValueError(response_detail(response))
     return response.json()
 
-st.title("Candidate Intelligence")
-st.caption("Upload CVs to extract an anonymous, job-relevant profile.")
-st.warning("Recruiter review required")
+st.caption("Upload candidate CVs to extract anonymous, job-relevant profiles.")
 
 job_id = render_job_selector()
 
 if job_id:
+    selected_job_card()
     try:
         persisted_candidates = load_processed_candidates(job_id)
         st.session_state.setdefault("upload_candidates_by_job", {})[job_id] = persisted_candidates
@@ -50,16 +52,17 @@ if job_id:
 else:
     persisted_candidates = []
 
-files = st.file_uploader(
-    "Choose CV files",
-    type=["pdf", "docx", "txt", "md"],
-    accept_multiple_files=True,
-    help="Files are validated, PII-redacted, parsed, and encrypted by Agent 1.",
-)
+with st.container(border=True):
+    files = st.file_uploader(
+        "Drag and drop CV files here",
+        type=["pdf", "docx", "txt", "md"],
+        accept_multiple_files=True,
+        help="Files are validated, PII-redacted, parsed, and encrypted by Agent 1.",
+    )
 
 uploaded_files = files or []
 
-if st.button("Process CVs", type="primary", disabled=not uploaded_files):
+if st.button("Upload and process CVs", type="primary", disabled=not uploaded_files, width="stretch", icon=":material/upload:"):
     job_id = job_id.strip()
     if not job_id:
         st.error("Select a saved job before processing CVs.")

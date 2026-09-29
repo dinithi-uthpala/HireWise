@@ -10,13 +10,16 @@ import streamlit as st
 try:
     from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
+    from frontend.ui import page_header, selected_job_card, skill_list
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
     from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
+    from ui import page_header, selected_job_card, skill_list
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 require_login()
+page_header("Candidate detail", "Review the evidence behind a candidate's matching score.", ":material/person_search:")
 
 
 def response_detail(response: requests.Response) -> str:
@@ -57,12 +60,12 @@ def load_candidates_with_retry(job_id: str) -> list[dict]:
     return candidates
 
 
-st.title("Candidate Detail")
-st.caption("Review the evidence behind a candidate's matching score.")
+st.caption("Evidence, confidence, privacy checks and risk signals for the selected candidate.")
 
 job_id = render_job_selector()
 if not job_id:
     st.stop()
+selected_job_card()
 
 selected_from_ranking = st.session_state.get("selected_candidate_id")
 if (

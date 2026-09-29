@@ -10,13 +10,16 @@ import streamlit as st
 try:
     from frontend.auth import auth_headers, require_login
     from frontend.job_selection import open_page, render_job_selector
+    from frontend.ui import page_header, selected_job_card
 except ModuleNotFoundError:  # Streamlit runs pages with frontend on sys.path.
     from auth import auth_headers, require_login
     from job_selection import open_page, render_job_selector
+    from ui import page_header, selected_job_card
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 require_login()
+page_header("Decision audit", "Review the tamper-evident decision history for each candidate.", ":material/manage_search:")
 
 
 def response_detail(response: requests.Response) -> str:
@@ -33,12 +36,12 @@ def load_candidates(job_id: str) -> list[dict]:
     return response.json()
 
 
-st.title("Audit Log")
 st.caption("Each entry contains a hash of the previous one, so editing or deleting an old entry is detected.")
 
 job_id = render_job_selector()
 if not job_id:
     st.stop()
+selected_job_card()
 
 if job_id != st.session_state.get("audit_job_id"):
     try:

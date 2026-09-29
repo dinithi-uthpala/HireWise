@@ -9,9 +9,11 @@ import streamlit as st
 try:
     from frontend.auth import require_login, auth_headers
     from frontend.job_selection import render_job_selector
+    from frontend.ui import page_header, selected_job_card
 except ModuleNotFoundError:
     from auth import require_login, auth_headers
     from job_selection import render_job_selector
+    from ui import page_header, selected_job_card
 
 
 API_BASE_URL = os.getenv(
@@ -21,6 +23,7 @@ API_BASE_URL = os.getenv(
 
 
 require_login()
+page_header("Fairness test", "Compare qualification-matched CVs after identity details are removed.", ":material/balance:")
 
 
 def response_detail(response: requests.Response) -> str:
@@ -35,8 +38,6 @@ def response_detail(response: requests.Response) -> str:
         or f"HTTP {response.status_code}"
     )
 
-
-st.title("Fairness Test")
 
 st.caption(
     "Identity details are removed before scoring, so candidates with equal "
@@ -54,6 +55,7 @@ job_id = render_job_selector()
 
 if not job_id:
     st.stop()
+selected_job_card()
 
 
 # ---------------------------------------------------------------------------
