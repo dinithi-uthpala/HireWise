@@ -15,6 +15,40 @@ flowchart LR
     A1 -->|REST / JSON| A2[Agent 2<br/>Retrieve and score against job]
     A2 -->|REST / JSON| A3[Agent 3<br/>Review risks and recommendation]
     A3 --> H[Human recruiter review]
+**A Responsible Multi-Agent AI System for Explainable Candidate Shortlisting**
+*Information Retrieval and Web Analytics (IT3041) —  Group Assignment*
+
+## One-line description
+
+HireWise helps HR officers conduct faster, consistent, transparent and
+privacy-aware **first-stage candidate shortlisting** from CVs. It is a
+**decision-support** system: the AI recommends, the human decides.
+
+## Architecture (3 collaborating agents)
+
+```
+        HR Dashboard (Streamlit frontend)
+                   │  Job + CVs (REST / JSON, JWT)
+                   ▼
+   ┌────────────────────────────────────────┐
+   │ Agent 1  Candidate Intelligence Agent   │  CV → anonymous structured profile
+   │          (extraction + PII redaction)   │  + extraction confidence
+   └───────────────────┬────────────────────┘
+                       │  anonymous profile
+                       ▼
+   ┌────────────────────────────────────────┐
+   │ Agent 2  Job Matching & Retrieval Agent │  ChromaDB retrieval, skill
+   │          (IR + normalization +   )      │  normalization, transparent score
+   └───────────────────┬────────────────────┘
+                       │  score + evidence
+                       ▼
+   ┌────────────────────────────────────────┐
+   │ Agent 3  Responsible Decision Agent     │  fairness/privacy/confidence
+   │          (explanation + recommendation) │  checks, audit trail
+   └───────────────────┬────────────────────┘
+                       │  recommendation + risks
+                       ▼
+                HUMAN HR REVIEW  (final decision)
 ```
 
 The FastAPI application exposes the agent and pipeline contracts. SQLite is the
